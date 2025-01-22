@@ -109,75 +109,100 @@ class BiliVideoDownloader:
     def save(self, directory, videore, audiore):
         """优化后的异步保存视频和音频文件"""
         filename_temp = os.path.join(directory, str(time.time()))
-        max_retries = 3  # 最大重试次数
-        chunk_size = 8 * 1024 * 1024  # 8MB 块
-        chunk_count = 16  # 16个并发下载块
-        download_timeout = 10  # 超时时间 (秒)
+        max_retries = 5  # 增加重试次数
+        base_chunk_size = 1024 * 1024  # 1MB 基础块大小
+        max_concurrent_downloads = 8  # 限制并发数
+        download_timeout = 30  # 增加超时时间
 
         async def download_file(url, filename, headers, cookies, description):
             total_size = 0
-            downloaded = [0]  # 使用列表以便在嵌套函数中修改
-            part_files = []  # 记录所有创建的分块文件
+            downloaded = [0]
+            part_files = []
+            semaphore = asyncio.Semaphore(max_concurrent_downloads)  # 控制并发数
 
-            async def download_range(start, end):
-                range_headers = headers.copy()
-                range_headers['Range'] = f'bytes={start}-{end}'
-                part_file = filename + f'.part{start}'
+            async def get_content_length():
+                async with aiohttp.ClientSession() as session:
+                    async with session.head(url, headers=headers, cookies=cookies) as response:
+                        return int(response.headers.get('content-length', 0))
+
+            async def download_chunk(start, end, chunk_index):
+                part_file = f"{filename}.part{chunk_index}"
                 part_files.append(part_file)
 
-                for retry in range(max_retries):
-                    try:
-                        async with aiohttp.ClientSession() as session:
-                            async with session.get(url, headers=range_headers, cookies=cookies) as response:
-                                async with aiofiles.open(part_file, 'wb') as f:
-                                    async for chunk in response.content.iter_chunked(chunk_size):
-                                        if chunk:
-                                            await f.write(chunk)
-                                            downloaded[0] += len(chunk)
-                                            percentage = (downloaded[0] / total_size) * 100 if total_size else 0
-                                            print(f"\r{description}: {percentage:.1f}%", end="", flush=True)
-                                            await asyncio.sleep(0)
-                        break  # 成功下载后跳出重试循环
-                    except Exception as e:
-                        print(f"下载块 {start}-{end} 时出错: {str(e)}，重试 {retry + 1}/{max_retries}")
-                        if retry == max_retries - 1:
-                            raise
+                async with semaphore:  # 使用信号量控制并发
+                    for retry in range(max_retries):
+                        try:
+                            chunk_headers = headers.copy()
+                            chunk_headers['Range'] = f'bytes={start}-{end}'
+
+                            timeout = aiohttp.ClientTimeout(total=download_timeout * (retry + 1))
+                            async with aiohttp.ClientSession(timeout=timeout) as session:
+                                async with session.get(url, headers=chunk_headers, cookies=cookies) as response:
+                                    if response.status != 206:
+                                        raise Exception(f"服务器不支持断点续传: {response.status}")
+
+                                    # 使用临时文件写入数据
+                                    async with aiofiles.open(part_file, 'wb') as f:
+                                        async for data in response.content.iter_chunked(base_chunk_size):
+                                            if data:
+                                                await f.write(data)
+                                                downloaded[0] += len(data)
+                                                # 更新进度
+                                                if total_size:
+                                                    percentage = min(100, downloaded[0] * 100 / total_size)
+                                                    print(f"\r{description}: {percentage:.1f}%", end="", flush=True)
+                                                # 定期释放控制权
+                                                await asyncio.sleep(0.001)
+                                    return True
+
+                        except Exception as e:
+                            if retry < max_retries - 1:
+                                wait_time = (retry + 1) * 2  # 指数退避
+                                print(f"\n下载块 {chunk_index} 失败: {str(e)}, {wait_time}秒后重试...")
+                                await asyncio.sleep(wait_time)
+                            else:
+                                print(f"\n下载块 {chunk_index} 最终失败: {str(e)}")
+                                raise
 
             try:
                 # 获取文件大小
-                async with aiohttp.ClientSession() as session:
-                    async with session.head(url, headers=headers, cookies=cookies) as response:
-                        total_size = int(response.headers.get('content-length', 0))
+                total_size = await get_content_length()
+                if total_size == 0:
+                    raise Exception("无法获取文件大小")
 
-                # 分块下载设置
-                chunk_size = max(total_size // chunk_count, 1024 * 1024)  # 确保每块至少1MB
-                chunks = []
+                # 根据文件大小动态调整分块
+                chunk_size = max(total_size // 32, 5 * 1024 * 1024)  # 最小5MB
+                chunk_count = (total_size + chunk_size - 1) // chunk_size
 
                 # 创建下载任务
+                tasks = []
                 for i in range(chunk_count):
                     start = i * chunk_size
-                    end = start + chunk_size - 1 if i < chunk_count - 1 else total_size - 1
-                    if start < total_size:  # 确保不会超出文件大小
-                        chunks.append(asyncio.wait_for(download_range(start, end), timeout=download_timeout))
+                    end = min(start + chunk_size - 1, total_size - 1)
+                    tasks.append(download_chunk(start, end, i))
 
-                # 并发下载
-                await asyncio.gather(*chunks)
+                # 执行所有下载任务
+                await asyncio.gather(*tasks)
 
                 # 合并文件块
                 async with aiofiles.open(filename, 'wb') as outfile:
                     for i in range(chunk_count):
-                        part_file = filename + f'.part{i * chunk_size}'
+                        part_file = f"{filename}.part{i}"
                         if os.path.exists(part_file):
                             async with aiofiles.open(part_file, 'rb') as infile:
-                                content = await infile.read()
-                                await outfile.write(content)
+                                while True:
+                                    chunk = await infile.read(base_chunk_size)
+                                    if not chunk:
+                                        break
+                                    await outfile.write(chunk)
+                                await asyncio.sleep(0.001)  # 避免阻塞
 
-                print()  # 换行
                 return True
 
             except Exception as e:
-                print(f"下载文件 {description} 时出错: {str(e)}")
+                print(f"\n下载失败: {str(e)}")
                 return False
+
             finally:
                 # 清理分块文件
                 for part_file in part_files:
@@ -185,48 +210,42 @@ class BiliVideoDownloader:
                         if os.path.exists(part_file):
                             os.remove(part_file)
                     except Exception as e:
-                        print(f"清理分块文件 {part_file} 时出错: {str(e)}")
+                        print(f"清理分块文件失败: {str(e)}")
 
         async def download_both():
             tasks = []
             # 视频下载任务
-            tasks.append(
-                download_file(
-                    videore.url,
-                    f"{filename_temp}.mp4",
-                    self.video.headers,
-                    self.video.cookies,
-                    "视频下载"
-                )
-            )
+            tasks.append(download_file(
+                videore.url,
+                f"{filename_temp}.mp4",
+                self.video.headers,
+                self.video.cookies,
+                "视频下载"
+            ))
             # 音频下载任务
-            tasks.append(
-                download_file(
-                    audiore.url,
-                    f"{filename_temp}.mp3",
-                    self.video.headers,
-                    self.video.cookies,
-                    "音频下载"
-                )
-            )
-            # 独立执行任务
+            tasks.append(download_file(
+                audiore.url,
+                f"{filename_temp}.mp3",
+                self.video.headers,
+                self.video.cookies,
+                "音频下载"
+            ))
+
             results = await asyncio.gather(*tasks, return_exceptions=True)
-            return all(result is True for result in results)
+            return all(isinstance(r, bool) and r for r in results)
 
         # 使用线程池执行异步任务
-        with ThreadPoolExecutor(max_workers=16) as executor:
+        with ThreadPoolExecutor(max_workers=2) as executor:
             future = executor.submit(lambda: asyncio.run(download_both()))
             try:
-                success = future.result()  # 等待下载完成
+                success = future.result()
                 if not success:
                     self.cleanup_file_parts(filename_temp)
                     raise Exception("下载过程中发生错误")
+                return filename_temp
             except Exception as e:
                 self.cleanup_file_parts(filename_temp)
-                print(f"下载出错: {str(e)}")
-                raise
-
-        return filename_temp
+                raise Exception(f"下载失败: {str(e)}")
 
     # 原始代码的辅助方法
     def remove(self, filename_temp):
