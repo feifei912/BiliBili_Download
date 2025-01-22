@@ -95,12 +95,14 @@ class BiliVideoDownloader:
             stdout, stderr = process.communicate()
 
             if process.returncode != 0:
+                self.cleanup_file_parts(filename_temp)
                 raise Exception(f"FFmpeg失败: {stderr.decode()}")
 
             # 清理临时文件
-            self.remove(filename_temp)
+            self.cleanup_file_parts(filename_temp)
 
         except Exception as e:
+            self.cleanup_file_parts(filename_temp)
             print(f"合并失败: {str(e)}")
             return False
 
@@ -115,23 +117,25 @@ class BiliVideoDownloader:
         async def download_file(url, filename, headers, cookies, description):
             total_size = 0
             downloaded = [0]  # 使用列表以便在嵌套函数中修改
+            part_files = []  # 记录所有创建的分块文件
 
             async def download_range(start, end):
                 range_headers = headers.copy()
                 range_headers['Range'] = f'bytes={start}-{end}'
+                part_file = filename + f'.part{start}'
+                part_files.append(part_file)
 
                 for retry in range(max_retries):
                     try:
                         async with aiohttp.ClientSession() as session:
                             async with session.get(url, headers=range_headers, cookies=cookies) as response:
-                                async with aiofiles.open(filename + f'.part{start}', 'wb') as f:
+                                async with aiofiles.open(part_file, 'wb') as f:
                                     async for chunk in response.content.iter_chunked(chunk_size):
                                         if chunk:
                                             await f.write(chunk)
                                             downloaded[0] += len(chunk)
                                             percentage = (downloaded[0] / total_size) * 100 if total_size else 0
                                             print(f"\r{description}: {percentage:.1f}%", end="", flush=True)
-                                            # 重置超时计时器
                                             await asyncio.sleep(0)
                         break  # 成功下载后跳出重试循环
                     except Exception as e:
@@ -139,44 +143,49 @@ class BiliVideoDownloader:
                         if retry == max_retries - 1:
                             raise
 
-            # 获取文件大小
-            async with aiohttp.ClientSession() as session:
-                async with session.head(url, headers=headers, cookies=cookies) as response:
-                    total_size = int(response.headers.get('content-length', 0))
-
-            # 分块下载设置
-            chunk_size = max(total_size // chunk_count, 1024 * 1024)  # 确保每块至少1MB
-            chunks = []
-
-            # 创建下载任务
-            for i in range(chunk_count):
-                start = i * chunk_size
-                end = start + chunk_size - 1 if i < chunk_count - 1 else total_size - 1
-                if start < total_size:  # 确保不会超出文件大小
-                    chunks.append(asyncio.wait_for(download_range(start, end), timeout=download_timeout))
-
-            # 并发下载
             try:
+                # 获取文件大小
+                async with aiohttp.ClientSession() as session:
+                    async with session.head(url, headers=headers, cookies=cookies) as response:
+                        total_size = int(response.headers.get('content-length', 0))
+
+                # 分块下载设置
+                chunk_size = max(total_size // chunk_count, 1024 * 1024)  # 确保每块至少1MB
+                chunks = []
+
+                # 创建下载任务
+                for i in range(chunk_count):
+                    start = i * chunk_size
+                    end = start + chunk_size - 1 if i < chunk_count - 1 else total_size - 1
+                    if start < total_size:  # 确保不会超出文件大小
+                        chunks.append(asyncio.wait_for(download_range(start, end), timeout=download_timeout))
+
+                # 并发下载
                 await asyncio.gather(*chunks)
+
+                # 合并文件块
+                async with aiofiles.open(filename, 'wb') as outfile:
+                    for i in range(chunk_count):
+                        part_file = filename + f'.part{i * chunk_size}'
+                        if os.path.exists(part_file):
+                            async with aiofiles.open(part_file, 'rb') as infile:
+                                content = await infile.read()
+                                await outfile.write(content)
+
+                print()  # 换行
+                return True
+
             except Exception as e:
                 print(f"下载文件 {description} 时出错: {str(e)}")
                 return False
-
-            # 合并文件块
-            async with aiofiles.open(filename, 'wb') as outfile:
-                for i in range(chunk_count):
-                    part_file = filename + f'.part{i * chunk_size}'
+            finally:
+                # 清理分块文件
+                for part_file in part_files:
                     try:
-                        async with aiofiles.open(part_file, 'rb') as infile:
-                            content = await infile.read()
-                            await outfile.write(content)
-                        # 删除临时文件
-                        os.remove(part_file)
-                    except FileNotFoundError:
-                        continue  # 跳过不存在的分块文件
-
-            print()  # 换行
-            return True
+                        if os.path.exists(part_file):
+                            os.remove(part_file)
+                    except Exception as e:
+                        print(f"清理分块文件 {part_file} 时出错: {str(e)}")
 
         async def download_both():
             tasks = []
@@ -210,8 +219,10 @@ class BiliVideoDownloader:
             try:
                 success = future.result()  # 等待下载完成
                 if not success:
+                    self.cleanup_file_parts(filename_temp)
                     raise Exception("下载过程中发生错误")
             except Exception as e:
+                self.cleanup_file_parts(filename_temp)
                 print(f"下载出错: {str(e)}")
                 raise
 
@@ -224,6 +235,29 @@ class BiliVideoDownloader:
             os.remove(f"{filename_temp}.mp3")
         except:
             pass
+
+    def cleanup_file_parts(self, filename_temp):
+        """清理所有相关的临时文件，包括分块文件"""
+        # 删除主文件
+        for ext in [".mp4", ".mp3"]:
+            try:
+                if os.path.exists(filename_temp + ext):
+                    os.remove(filename_temp + ext)
+            except Exception as e:
+                print(f"删除{ext}文件时出错: {str(e)}")
+
+        # 删除所有分块文件
+        base_dir = os.path.dirname(filename_temp)
+        base_name = os.path.basename(filename_temp)
+        try:
+            for file in os.listdir(base_dir):
+                if file.startswith(base_name) and ".part" in file:
+                    try:
+                        os.remove(os.path.join(base_dir, file))
+                    except Exception as e:
+                        print(f"删除分块文件{file}时出错: {str(e)}")
+        except Exception as e:
+            print(f"清理分块文件时出错: {str(e)}")
 
     def get_bit(self, videore, audiore):
         return int(videore.headers.get('Content-Length')) + int(audiore.headers.get('Content-Length'))
