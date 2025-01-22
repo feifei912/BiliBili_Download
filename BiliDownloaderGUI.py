@@ -9,42 +9,42 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
         self.downloader = BiliVideoDownloader()
-        # Window dragging state
+        # 窗口拖动状态
         self.m_flag = False
         self.m_Position = None
 
-        # Use a frameless window and enable translucent background
+        # 使用无边框窗口并启用透明背景
         self.setWindowFlags(QtCore.Qt.FramelessWindowHint)
         self.setAttribute(QtCore.Qt.WA_TranslucentBackground)
 
-        # Create the main layout
+        # 创建主布局
         self.main_widget = QtWidgets.QWidget()
         self.main_layout = QtWidgets.QGridLayout(self.main_widget)
         self.main_layout.setSpacing(0)
         self.setCentralWidget(self.main_widget)
 
-        # Set a title bar widget at the top (for dragging and control buttons)
+        # 设置顶部标题栏组件(用于拖动和控制按钮)
         self.setup_title_bar()
-        # Set up the main content area
+        # 设置主要内容区域
         self.setup_content_area()
-        # Apply styles
+        # 应用样式
         self.init_style()
 
     def setup_title_bar(self):
-        """Create a custom title bar with typical right-corner controls."""
+        """创建自定义标题栏，包含右上角控制按钮"""
         self.title_bar = QtWidgets.QWidget()
         self.title_bar.setObjectName("title_bar")
         self.title_bar_layout = QtWidgets.QHBoxLayout(self.title_bar)
         self.title_bar_layout.setContentsMargins(10, 0, 10, 0)
 
-        # A title label on the left
+        # 左侧标题标签
         self.title_label = QtWidgets.QLabel("哔哩哔哩下载器")
         self.title_label.setStyleSheet("color: white; background-color: transparent;")
         self.title_label.setAutoFillBackground(True)
         self.title_label.setObjectName("title_label")
         self.title_label.setAlignment(QtCore.Qt.AlignVCenter | QtCore.Qt.AlignLeft)
 
-        # Controls on the right
+        # 右侧的控件按钮
         self.btn_min = QtWidgets.QPushButton("")
         self.btn_max = QtWidgets.QPushButton("")
         self.btn_close = QtWidgets.QPushButton("")
@@ -61,38 +61,38 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
         self.title_bar_layout.addWidget(self.btn_max)
         self.title_bar_layout.addWidget(self.btn_close)
 
-        # Insert the title bar in the main layout (row 0)
+        # 在主布局中插入标题栏（第 0 行）
         self.main_layout.addWidget(self.title_bar, 0, 0, 1, 12)
 
     def toggle_max_restore(self):
-        """Toggle between Maximize and Restore."""
+        """在最大化和还原之间切换"""
         if self.isMaximized():
             self.showNormal()
         else:
             self.showMaximized()
 
     def setup_content_area(self):
-        """Set up the main content area (below the title bar)."""
-        # Create a widget to hold left and right sections
+        """设置主要内容区域(标题栏下方)"""
+        # 创建用于容纳左右两部分的组件
         self.content_widget = QtWidgets.QWidget()
         self.content_layout = QtWidgets.QGridLayout(self.content_widget)
         self.content_layout.setSpacing(0)
 
-        # Create left and right sections
+        # 创建左右两部分
         self.setup_left_widget()
         self.setup_right_widget()
 
-        # Add to layout (rows start at 1 to place below the title bar)
+        # 添加到布局中(从第1行开始，位于标题栏下方)
         self.main_layout.addWidget(self.content_widget, 1, 0, 12, 12)
 
     def setup_left_widget(self):
-        """Left panel with buttons."""
+        """左侧面板包含按钮"""
         self.left_widget = QtWidgets.QWidget()
         self.left_widget.setObjectName('left_widget')
         self.left_layout = QtWidgets.QGridLayout()
         self.left_widget.setLayout(self.left_layout)
 
-        # Menu buttons
+        # 左侧按钮
         self.left_button_1 = QtWidgets.QPushButton(qtawesome.icon('fa.download', color='black'), "开始下载")
         self.left_button_1.setObjectName('left_button')
         self.left_button_1.setStyleSheet("color: black;")
@@ -102,21 +102,21 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
         self.left_button_2.setObjectName('left_button')
         self.left_button_2.setStyleSheet("color: black;")
         self.left_button_2.clicked.connect(self.browse_path)
-        # Label or title in the left panel
+        # 左侧标签
         self.left_label_1 = QtWidgets.QPushButton("配置列表")
         self.left_label_1.setObjectName('left_label')
         self.left_label_1.setStyleSheet("color: black;")
 
-        # Add them to the layout
+        # 将按钮和标签添加到左侧布局中
         self.left_layout.addWidget(self.left_label_1, 0, 0, 1, 1)
         self.left_layout.addWidget(self.left_button_1, 1, 0, 1, 1)
         self.left_layout.addWidget(self.left_button_2, 2, 0, 1, 1)
 
-        # Place the left widget in the content layout
+        # 将左侧组件添加到主布局中
         self.content_layout.addWidget(self.left_widget, 0, 0, 12, 3)
 
     def setup_right_widget(self):
-        """Right panel (inputs, progress bar, etc.)."""
+        """右侧面板包含输入框、下载选项和进度条"""
         self.right_widget = QtWidgets.QWidget()
         self.right_widget.setObjectName('right_widget')
         self.right_layout = QtWidgets.QGridLayout()
@@ -199,10 +199,9 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
         self.right_layout.addWidget(progress_widget, 4, 0, 2, 12)
 
     def mousePressEvent(self, event):
-        """Allow window dragging when user clicks on the title bar (or empty areas)."""
-        # Check if the click is within the title bar's area
+        """允许用户点击标题栏进行窗口拖动"""
         if event.button() == QtCore.Qt.LeftButton:
-            # Use geometry to check if click is on the title bar
+            # 使用几何位置检查点击是否在标题栏区域
             title_bar_geo = self.title_bar.geometry()
             global_pos = self.mapToGlobal(event.pos())
             title_bar_top_left = self.title_bar.mapToGlobal(title_bar_geo.topLeft())
@@ -216,18 +215,18 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
             self.setCursor(QtGui.QCursor(QtCore.Qt.OpenHandCursor))
 
     def mouseMoveEvent(self, event):
-        """Handle the window moving."""
+        """处理窗口移动"""
         if self.m_flag and event.buttons() == QtCore.Qt.LeftButton:
             self.move(event.globalPos() - self.m_Position)
             event.accept()
 
     def mouseReleaseEvent(self, event):
-        """Unset dragging state."""
+        """取消拖动状态"""
         self.m_flag = False
         self.setCursor(QtGui.QCursor(QtCore.Qt.ArrowCursor))
 
     def browse_path(self):
-        """Choose save path."""
+        """选择保存路径"""
         path = QtWidgets.QFileDialog.getExistingDirectory(
             self, "选择保存目录", self.path_input.text()
         )
@@ -278,7 +277,7 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
         except Exception as e:
             self.status_label.setText("视频检查失败")
             self.progress.setValue(0)
-            QtWidgets.QMessageBox.critical(self, "错��", f"检查视频时出错：{str(e)}")
+            QtWidgets.QMessageBox.critical(self, "错误", f"检查视频时出错：{str(e)}")
 
     def start_download(self):
         """开始下载"""
@@ -322,7 +321,7 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
             QtWidgets.QMessageBox.critical(self, "错误", f"下载过程中出错：{str(e)}")
 
     def init_style(self):
-        """Apply styles to the UI."""
+        """设置窗口样式"""
         self.main_widget.setStyleSheet('''
             QWidget {
                 background-color: #FFFFFF;
@@ -351,36 +350,32 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
         ''')
 
         self.left_widget.setStyleSheet('''
-            QWidget#left_widget {
-                background-color: #2B2B2B;
-                border-bottom-left-radius: 10px;
-            }
-            QPushButton#left_label {
-                border: none;
-                color: white;
-                font-size: 16px;
-                font-weight: 700;
-                padding: 15px;
-                text-align: center;
-            }
-            QPushButton#left_button {
-                border: none;
-                color: white;
-                font-size: 14px;
-                font-weight: 500;
-                padding: 10px 0;
-                padding-left: 30px;
-                text-align: left;
-                text-align: center;  /* 改为居中对齐 */
-                margin: 5px 20px;    /* 添加左右边距 */
-            }
-            QPushButton#left_button:hover {
-                border-left: 4px solid #F76677;
-                font-weight: 700;
-                background-color: #383838;
-                border-radius: 5px;  /* 添加圆角 */
-            }
-        ''')
+                QWidget#left_widget {
+                    background-color: #2B2B2B;
+                    border-bottom-left-radius: 10px;
+                }
+                QPushButton#left_label {
+                    border: none;
+                    color: white;
+                    font-size: 16px;
+                    font-weight: 700;
+                    padding: 15px;
+                    text-align: center;
+                }
+                QPushButton#left_button {
+                    border: none;
+                    color: white;
+                    font-size: 14px;
+                    font-weight: 500;
+                    padding: 10px 0;
+                    text-align: center;
+                    margin: 5px 20px;
+                }
+                QPushButton#left_button:hover {
+                    background-color: #383838;
+                    border-radius: 5px;
+                }
+            ''')
 
         self.right_widget.setStyleSheet('''
             QWidget#right_widget {
@@ -453,7 +448,7 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
             }
         ''')
 
-        # Style for the custom minimize, maximize, close buttons
+        # 控制按钮样式
         self.btn_min.setStyleSheet('''
             QPushButton {
                 background: #6DDF6D;
