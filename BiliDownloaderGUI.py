@@ -398,7 +398,12 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
         - 获取视频音频流
         - 保存并合并文件
         - 记录下载历史
+        - 错误时清理临时文件
         """
+        temp_files = []  # 用于存储所有临时文件路径
+        part_files = []  # 用于存储分块文件路径
+        current_time = QtCore.QDateTime.currentDateTime().toString('yyyy-MM-dd hh:mm:ss')
+
         try:
             # 获取并验证必要的输入参数
             sessdata = self.sessdata_input.text().strip()
@@ -432,6 +437,9 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
 
             # 保存视频和音频流到临时文件
             filename_temp = self.downloader.save(save_path, videore, audiore)
+            # 添加临时文件到跟踪列表
+            temp_files.append(f"{filename_temp}.mp4")
+            temp_files.append(f"{filename_temp}.mp3")
 
             # 更新合并进度
             self.progress.setValue(80)
@@ -442,16 +450,13 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
             final_path = os.path.join(save_path, title)
             self.downloader.merge_videos(filename_temp, final_path)
 
-            # 获取当前系统时间
-            current_time = QtCore.QDateTime.currentDateTime().toString('yyyy-MM-dd hh:mm:ss')
-
             # 保存下载历史记录
             download_info = {
                 'title': title,
                 'quality': f"{self.quality_combo.currentText()}",
                 'save_path': save_path,
                 'bvid': bvid,
-                'download_time': current_time  # 使用系统当前时间
+                'download_time': current_time
             }
             self.save_history(download_info)
 
@@ -468,12 +473,46 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
             self.status_label.setText("下载失败")
             self.progress.setValue(0)
 
+            # 清理所有临时文件
+            def cleanup_files(file_list):
+                for file in file_list:
+                    try:
+                        if os.path.exists(file):
+                            os.remove(file)
+                            print(f"已删除临时文件: {file}")
+                    except Exception as del_err:
+                        print(f"删除临时文件失败: {file}, 错误: {str(del_err)}")
+
+            # 清理临时文件
+            cleanup_files(temp_files)
+
             # 显示详细的错误信息
-            error_message = f"下载过程中出错：\n{str(e)}\n\n请检查：\n1. 网络连接\n2. SESSDATA是否有效\n3. BV号是否正确"
+            error_message = (
+                f"下载过程中出错：\n{str(e)}\n\n"
+                "可能的原因：\n"
+                "1. 网络连接不稳定\n"
+                "2. 存储空间不足\n"
+                "3. 视频文件过大\n"
+                "4. SESSDATA无效或过期\n"
+                "\n建议：\n"
+                "- 检查网络连接\n"
+                "- 确保有足够的存储空间\n"
+                "- 尝试下载较低质量的视频"
+            )
             QtWidgets.QMessageBox.critical(self, "错误", error_message)
 
             # 打印错误日志
             print(f"下载失败 - BV号: {bvid}, 错误信息: {str(e)}")
+
+        finally:
+            # 最后一次确保清理所有临时文件
+            for file in temp_files:
+                try:
+                    if os.path.exists(file):
+                        os.remove(file)
+                        print(f"清理临时文件: {file}")
+                except Exception as del_err:
+                    print(f"清理临时文件失败: {file}, 错误: {str(del_err)}")
 
     def init_style(self):
         """设置窗口样式"""
