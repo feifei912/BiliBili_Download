@@ -15,10 +15,13 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
         self.downloader = BiliVideoDownloader()
         self.m_flag = False
         self.m_Position = None
+        # 配置文件路径
         self.config_file = os.path.join(os.path.expanduser("~"), ".bilidownloader_config.json")
         self.config = {
             'last_save_path': os.path.join(os.path.expanduser("~"), "Downloads")
         }
+        # 历史记录文件路径
+        self.history_file = os.path.join(os.path.expanduser("~"), ".bilidownloader_history.json")
 
         # 加载配置
         self.load_config()
@@ -134,10 +137,17 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
         self.left_button_2.setStyleSheet("color: black;")
         self.left_button_2.clicked.connect(self.browse_path)
 
+        # 添加历史记录按钮
+        self.left_button_3 = QtWidgets.QPushButton(qtawesome.icon('fa.history', color='black'), "下载历史")
+        self.left_button_3.setObjectName('left_button')
+        self.left_button_3.setStyleSheet("color: black;")
+        self.left_button_3.clicked.connect(self.show_history)
+
         # 将按钮和标签添加到左侧布局中
         self.left_layout.addWidget(self.left_label_1, 0, 0, 1, 1)
         self.left_layout.addWidget(self.left_button_1, 2, 0, 1, 1)
         self.left_layout.addWidget(self.left_button_2, 1, 0, 1, 1)
+        self.left_layout.addWidget(self.left_button_3, 3, 0, 1, 1)
 
         # 将左侧组件添加到主布局中
         self.content_layout.addWidget(self.left_widget, 0, 0, 12, 3)
@@ -263,6 +273,77 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
             self.config['last_save_path'] = path
             self.save_config()
 
+    def load_history(self):
+        """加载下载历史记录
+        从history_file加载JSON格式的历史记录
+        如果文件不存在或出错则返回空列表
+        """
+        try:
+            if os.path.exists(self.history_file):
+                with open(self.history_file, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+        except Exception as e:
+            print(f"加载历史记录失败: {e}")
+        return []
+
+    def save_history(self, download_info):
+        """保存下载历史记录
+        Args:
+            download_info: 包含下载信息的字典,包括标题、清晰度、保存路径等
+        将新的下载记录添加到历史记录中,并限制最多保存100条
+        """
+        try:
+            history = self.load_history()
+            # 添加时间戳
+            download_info['timestamp'] = QtCore.QDateTime.currentDateTime().toString('yyyy-MM-dd hh:mm:ss')
+            history.append(download_info)
+            # 只保留最近100条记录
+            if len(history) > 100:
+                history = history[-100:]
+            # 保存到文件
+            with open(self.history_file, 'w', encoding='utf-8') as f:
+                json.dump(history, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"保存历史记录失败: {e}")
+
+    def show_history(self):
+        """显示下载历史记录窗口
+        创建一个新窗口显示所有下载记录
+        使用表格形式展示,包含时间、标题、清晰度、保存路径等信息
+        """
+        history = self.load_history()
+        if not history:
+            QtWidgets.QMessageBox.information(self, "下载历史", "暂无下载记录")
+            return
+
+        # 创建历史记录窗口
+        history_dialog = QtWidgets.QDialog(self)
+        history_dialog.setWindowTitle("下载历史")
+        history_dialog.setMinimumWidth(500)
+        history_dialog.setMinimumHeight(400)
+
+        # 创建表格并设置列
+        table = QtWidgets.QTableWidget()
+        table.setColumnCount(4)
+        table.setHorizontalHeaderLabels(["时间", "视频标题", "清晰度", "保存路径"])
+        # 自动调整列宽
+        table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
+
+        # 填充数据(倒序显示,最新的在上面)
+        table.setRowCount(len(history))
+        for row, item in enumerate(reversed(history)):
+            table.setItem(row, 0, QtWidgets.QTableWidgetItem(item.get('timestamp', '')))
+            table.setItem(row, 1, QtWidgets.QTableWidgetItem(item.get('title', '')))
+            table.setItem(row, 2, QtWidgets.QTableWidgetItem(item.get('quality', '')))
+            table.setItem(row, 3, QtWidgets.QTableWidgetItem(item.get('save_path', '')))
+
+        # 设置窗口布局
+        layout = QtWidgets.QVBoxLayout()
+        layout.addWidget(table)
+        history_dialog.setLayout(layout)
+
+        history_dialog.exec_()
+
     def check_video(self):
         """检查视频信息"""
         try:
@@ -310,45 +391,89 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
             QtWidgets.QMessageBox.critical(self, "错误", f"检查视频时出错：{str(e)}")
 
     def start_download(self):
-        """开始下载"""
+        """
+        开始下载视频
+        - 验证输入参数
+        - 设置下载进度
+        - 获取视频音频流
+        - 保存并合并文件
+        - 记录下载历史
+        """
         try:
+            # 获取并验证必要的输入参数
             sessdata = self.sessdata_input.text().strip()
             bvid = self.bv_input.text().strip()
             save_path = self.path_input.text().strip()
+
+            # 检查必要参数是否完整
             if not all([sessdata, bvid, save_path]):
                 QtWidgets.QMessageBox.warning(self, "警告", "请填写所有必要信息")
                 return
 
+            # 获取选择的视频质量
             quality = self.quality_combo.currentData()
             if not quality:
                 QtWidgets.QMessageBox.warning(self, "警告", "请先检查视频并选择质量")
                 return
 
+            # 更新状态显示
             self.status_label.setText("正在下载...")
             self.progress.setValue(20)
 
+            # 设置下载器的cookie
             self.downloader.set_cookie(sessdata)
+
+            # 获取视频和音频流
             videore, audiore = self.downloader.video.get_video(bvid, pages=1, quality=quality)
 
+            # 更新下载进度
             self.progress.setValue(50)
             self.status_label.setText("正在保存文件...")
 
+            # 保存视频和音频流到临时文件
             filename_temp = self.downloader.save(save_path, videore, audiore)
 
+            # 更新合并进度
             self.progress.setValue(80)
             self.status_label.setText("正在合并音视频...")
 
+            # 获取视频标题并合并音视频文件
             title = self.downloader.get_title(bvid)
-            self.downloader.merge_videos(filename_temp, os.path.join(save_path, title))
+            final_path = os.path.join(save_path, title)
+            self.downloader.merge_videos(filename_temp, final_path)
 
+            # 获取当前系统时间
+            current_time = QtCore.QDateTime.currentDateTime().toString('yyyy-MM-dd hh:mm:ss')
+
+            # 保存下载历史记录
+            download_info = {
+                'title': title,
+                'quality': f"{self.quality_combo.currentText()}",
+                'save_path': save_path,
+                'bvid': bvid,
+                'download_time': current_time  # 使用系统当前时间
+            }
+            self.save_history(download_info)
+
+            # 更新完成状态
             self.progress.setValue(100)
             self.status_label.setText("下载完成！")
-            QtWidgets.QMessageBox.information(self, "成功", "视频下载完成！")
+
+            # 显示成功消息
+            success_message = f"视频下载完成！\n保存位置：{final_path}"
+            QtWidgets.QMessageBox.information(self, "成功", success_message)
 
         except Exception as e:
+            # 发生错误时的处理
             self.status_label.setText("下载失败")
             self.progress.setValue(0)
-            QtWidgets.QMessageBox.critical(self, "错误", f"下载过程中出错：{str(e)}")
+
+            # 显示详细的错误信息
+            error_message = f"下载过程中出错：\n{str(e)}\n\n请检查：\n1. 网络连接\n2. SESSDATA是否有效\n3. BV号是否正确"
+            QtWidgets.QMessageBox.critical(self, "错误", error_message)
+
+            # 打印错误日志
+            print(f"下载失败 - BV号: {bvid}, 错误信息: {str(e)}")
 
     def init_style(self):
         """设置窗口样式"""
