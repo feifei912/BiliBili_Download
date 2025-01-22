@@ -1,19 +1,29 @@
 import os
 import sys
-from PyQt5 import QtCore, QtGui, QtWidgets
+import json
 import qtawesome
+from PyQt5 import QtCore, QtGui, QtWidgets
 from BiliVideoDownloader import BiliVideoDownloader
 
 
 class BiliDownloaderGUI(QtWidgets.QMainWindow):
     def __init__(self):
+        # 首先调用父类的初始化
         super().__init__()
+
+        # 初始化所有实例变量
         self.downloader = BiliVideoDownloader()
-        # 窗口拖动状态
         self.m_flag = False
         self.m_Position = None
+        self.config_file = os.path.join(os.path.expanduser("~"), ".bilidownloader_config.json")
+        self.config = {
+            'last_save_path': os.path.join(os.path.expanduser("~"), "Downloads")
+        }
 
-        # 使用无边框窗口并启用透明背景
+        # 加载配置
+        self.load_config()
+
+        # 设置窗口属性
         self.setWindowFlags(QtCore.Qt.FramelessWindowHint)
         self.setAttribute(QtCore.Qt.WA_TranslucentBackground)
 
@@ -23,19 +33,35 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
         self.main_layout.setSpacing(0)
         self.setCentralWidget(self.main_widget)
 
-        # 设置顶部标题栏组件(用于拖动和控制按钮)
+        # 设置界面组件
         self.setup_title_bar()
-        # 设置主要内容区域
         self.setup_content_area()
-        # 应用样式
         self.init_style()
+
+    def load_config(self):
+        """加载配置文件"""
+        try:
+            if os.path.exists(self.config_file):
+                with open(self.config_file, 'r', encoding='utf-8') as f:
+                    saved_config = json.load(f)
+                    self.config.update(saved_config)
+        except Exception as e:
+            print(f"加载配置文件失败: {e}")
+
+    def save_config(self):
+        """保存配置文件"""
+        try:
+            with open(self.config_file, 'w', encoding='utf-8') as f:
+                json.dump(self.config, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"保存配置文件失败: {e}")
 
     def setup_title_bar(self):
         """创建自定义标题栏，包含右上角控制按钮"""
         self.title_bar = QtWidgets.QWidget()
         self.title_bar.setObjectName("title_bar")
         self.title_bar_layout = QtWidgets.QHBoxLayout(self.title_bar)
-        self.title_bar_layout.setContentsMargins(10, 0, 10, 0)
+        self.title_bar_layout.setContentsMargins(45, 0, 10, 0)
 
         # 左侧标题标签
         self.title_label = QtWidgets.QLabel("哔哩哔哩下载器")
@@ -164,10 +190,10 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
         self.quality_label = QtWidgets.QLabel('视频质量:')
         self.quality_combo = QtWidgets.QComboBox()
 
-        # 保存路径
+        # 保存路径 - 使用配置中的路径
         self.path_label = QtWidgets.QLabel('保存路径:')
         self.path_input = QtWidgets.QLineEdit()
-        self.path_input.setText(os.path.join(os.path.expanduser("~"), "Downloads"))
+        self.path_input.setText(self.config['last_save_path'])
         self.browse_button = QtWidgets.QPushButton("浏览")
         self.browse_button.clicked.connect(self.browse_path)
 
@@ -232,6 +258,9 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
         )
         if path:
             self.path_input.setText(path)
+            # 保存新的路径到配置
+            self.config['last_save_path'] = path
+            self.save_config()
 
     def check_video(self):
         """检查视频信息"""
@@ -338,7 +367,7 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
                 color: #FFFFFF;
                 font-size: 16px;
                 font-weight: bold;
-                padding-left: 5px;
+                padding-left: 0px;
             }
             QPushButton {
                 border: none;
@@ -359,8 +388,9 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
                     color: white;
                     font-size: 16px;
                     font-weight: 700;
-                    padding: 15px;
+                    padding: 10px 0;
                     text-align: center;
+                    margin: 5px 20px;
                 }
                 QPushButton#left_button {
                     border: none;
@@ -375,7 +405,7 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
                     background-color: #383838;
                     border-radius: 5px;
                 }
-            ''')
+        ''')
 
         self.right_widget.setStyleSheet('''
             QWidget#right_widget {
