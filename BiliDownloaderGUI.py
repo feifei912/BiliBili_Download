@@ -118,6 +118,11 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
         self.left_layout = QtWidgets.QGridLayout()
         self.left_widget.setLayout(self.left_layout)
 
+        # 左侧标签
+        self.left_label_1 = QtWidgets.QPushButton("配置列表")
+        self.left_label_1.setObjectName('left_label')
+        self.left_label_1.setStyleSheet("color: black;")
+
         # 左侧按钮
         self.left_button_1 = QtWidgets.QPushButton(qtawesome.icon('fa.download', color='black'), "开始下载")
         self.left_button_1.setObjectName('left_button')
@@ -128,15 +133,11 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
         self.left_button_2.setObjectName('left_button')
         self.left_button_2.setStyleSheet("color: black;")
         self.left_button_2.clicked.connect(self.browse_path)
-        # 左侧标签
-        self.left_label_1 = QtWidgets.QPushButton("配置列表")
-        self.left_label_1.setObjectName('left_label')
-        self.left_label_1.setStyleSheet("color: black;")
 
         # 将按钮和标签添加到左侧布局中
         self.left_layout.addWidget(self.left_label_1, 0, 0, 1, 1)
-        self.left_layout.addWidget(self.left_button_1, 1, 0, 1, 1)
-        self.left_layout.addWidget(self.left_button_2, 2, 0, 1, 1)
+        self.left_layout.addWidget(self.left_button_1, 2, 0, 1, 1)
+        self.left_layout.addWidget(self.left_button_2, 1, 0, 1, 1)
 
         # 将左侧组件添加到主布局中
         self.content_layout.addWidget(self.left_widget, 0, 0, 12, 3)
