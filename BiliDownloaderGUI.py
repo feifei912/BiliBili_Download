@@ -192,12 +192,21 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
         input_widget = QtWidgets.QWidget()
         input_layout = QtWidgets.QGridLayout(input_widget)
 
-        # SESSDATA输入框
+        # SESSDATA输入框和标签
         self.sessdata_label = QtWidgets.QLabel('SESSDATA:')
         self.sessdata_input = QtWidgets.QLineEdit()
         self.sessdata_input.setPlaceholderText("请输入SESSDATA")
 
-        # BV号输入框
+        # 添加保存cookie的复选框，调整位置使其与SESSDATA输入框对齐
+        self.save_cookie_checkbox = QtWidgets.QCheckBox("记住cookie（不建议在公共设备上使用）")
+        self.save_cookie_checkbox.setObjectName("save_cookie_checkbox")
+        # 根据配置设置复选框状态
+        self.save_cookie_checkbox.setChecked(self.config.get('save_cookie', False))
+        # 如果之前保存了SESSDATA，自动填充
+        if self.config.get('save_cookie') and self.config.get('sessdata'):
+            self.sessdata_input.setText(self.config['sessdata'])
+
+        # BV号输入框和标签
         self.bv_label = QtWidgets.QLabel('BV号:')
         self.bv_input = QtWidgets.QLineEdit()
         self.bv_input.setPlaceholderText("请输入BV号")
@@ -206,11 +215,17 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
         self.check_button = QtWidgets.QPushButton("检查视频")
         self.check_button.clicked.connect(self.check_video)
 
-        input_layout.addWidget(self.sessdata_label, 0, 0)
-        input_layout.addWidget(self.sessdata_input, 0, 1, 1, 3)
-        input_layout.addWidget(self.bv_label, 1, 0)
-        input_layout.addWidget(self.bv_input, 1, 1, 1, 2)
-        input_layout.addWidget(self.check_button, 1, 3)
+        # 修改布局，调整复选框位置使其与SESSDATA对齐
+        input_layout.addWidget(self.sessdata_label, 0, 0)  # SESSDATA标签
+        input_layout.addWidget(self.sessdata_input, 0, 1, 1, 3)  # SESSDATA输入框
+        input_layout.addWidget(self.save_cookie_checkbox, 1, 1, 1, 3)  # 复选框右移，与输入框对齐
+        input_layout.addWidget(self.bv_label, 2, 0)  # BV号标签
+        input_layout.addWidget(self.bv_input, 2, 1, 1, 2)  # BV号输入框
+        input_layout.addWidget(self.check_button, 2, 3)  # 检查按钮
+
+        # 设置布局的间距
+        input_layout.setContentsMargins(10, 10, 10, 10)  # 设置外边距
+        input_layout.setSpacing(10)  # 设置组件之间的间距
 
         self.right_layout.addWidget(input_widget, 0, 0, 2, 12)
 
@@ -375,6 +390,14 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
                 QtWidgets.QMessageBox.warning(self, "警告", "请输入SESSDATA和BV号")
                 return
 
+            # 保存cookie配置
+            self.config['save_cookie'] = self.save_cookie_checkbox.isChecked()
+            if self.config['save_cookie']:
+                self.config['sessdata'] = sessdata
+            else:
+                self.config['sessdata'] = ''
+            self.save_config()
+
             self.status_label.setText("正在检查视频信息...")
             self.progress.setValue(20)
 
@@ -424,6 +447,14 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
             if not all([sessdata, bvid, save_path]):
                 QtWidgets.QMessageBox.warning(self, "警告", "请填写所有必要信息")
                 return
+
+            # 保存cookie配置
+            self.config['save_cookie'] = self.save_cookie_checkbox.isChecked()
+            if self.config['save_cookie']:
+                self.config['sessdata'] = sessdata
+            else:
+                self.config['sessdata'] = ''
+            self.save_config()
 
             # 获取选择的视频质量
             quality = self.quality_combo.currentData()
@@ -657,6 +688,21 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
                 font-size: 13px;
             }
         ''')
+
+        # 添加复选框样式
+        self.save_cookie_checkbox.setStyleSheet('''
+                QCheckBox {
+                    color: #666666;
+                    font-size: 12px;
+                    padding: 5px 0;
+                }
+                QCheckBox:hover {
+                    color: #333333;
+                }
+                QCheckBox:checked {
+                    color: #4A90E2;
+                }
+            ''')
 
         # 控制按钮样式
         self.btn_min.setStyleSheet('''
