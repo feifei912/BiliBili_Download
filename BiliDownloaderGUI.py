@@ -9,6 +9,31 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 from BiliVideoDownloader import BiliVideoDownloader
 
 
+class EllipsisTableWidgetItem(QtWidgets.QTableWidgetItem):
+    def __init__(self, text):
+        super().__init__()
+        self.full_text = text
+        self.setTextWithEllipsis(text)
+
+    def setTextWithEllipsis(self, text, width=500):
+        """设置带省略号的文本"""
+        # 创建一个QFontMetrics对象来计算文本宽度
+        metrics = QtGui.QFontMetrics(self.font())
+        # 如果文本宽度超过限制
+        if metrics.width(text) > width:
+            # 逐个字符尝试，直到找到合适的长度
+            for i in range(len(text), 0, -1):
+                truncated_text = text[:i] + '...'
+                if metrics.width(truncated_text) <= width:
+                    super().setText(truncated_text)
+                    return
+        # 如果文本没有超过限制，直接设置
+        super().setText(text)
+
+    def text(self):
+        """返回完整的文本"""
+        return self.full_text
+
 class BiliDownloaderGUI(QtWidgets.QMainWindow):
     # 定义类级别的信号
     download_progress = QtCore.pyqtSignal(int, str)
@@ -353,10 +378,7 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
             print(f"保存历史记录失败: {e}")
 
     def show_history(self):
-        """显示下载历史记录窗口
-        创建一个新窗口显示所有下载记录
-        使用表格形式展示,包含时间、标题、清晰度、保存路径等信息
-        """
+        """显示下载历史记录窗口"""
         history = self.load_history()
         if not history:
             QtWidgets.QMessageBox.information(self, "下载历史", "暂无下载记录")
@@ -365,30 +387,125 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
         # 创建历史记录窗口
         history_dialog = QtWidgets.QDialog(self)
         history_dialog.setWindowTitle("下载历史")
-        history_dialog.setMinimumWidth(700)
-        history_dialog.setMinimumHeight(400)
+        history_dialog.setMinimumWidth(800)
+        history_dialog.setMinimumHeight(500)
 
-        # 创建表格并设置列
+        # 创建表格
         table = QtWidgets.QTableWidget()
-        table.setColumnCount(4)
-        table.setHorizontalHeaderLabels(["时间", "视频标题", "清晰度", "保存路径"])
-        # 自动调整列宽
-        table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
+        table.setColumnCount(5)  # 增加一列用于删除按钮
+        table.setHorizontalHeaderLabels(["时间", "视频标题", "清晰度", "保存路径", "操作"])
 
-        # 填充数据(倒序显示,最新的在上面)
+        # 设置表格属性
+        table.setEditTriggers(QtWidgets.QTableWidget.DoubleClicked)  # 允许双击编辑
+        table.setSelectionBehavior(QtWidgets.QTableWidget.SelectRows)  # 整行选择
+        table.setSelectionMode(QtWidgets.QTableWidget.SingleSelection)  # 单行选择模式
+
+        # 设置列宽
+        table.setColumnWidth(0, 150)  # 时间列
+        table.setColumnWidth(1, 300)  # 标题列
+        table.setColumnWidth(2, 100)  # 清晰度列
+        table.horizontalHeader().setSectionResizeMode(3, QtWidgets.QHeaderView.Stretch)  # 路径列自适应
+        table.setColumnWidth(4, 60)  # 操作列
+
+        # 创建右键菜单
+        table.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        table.customContextMenuRequested.connect(lambda pos: self.show_history_context_menu(pos, table))
+
+        # 填充数据
         table.setRowCount(len(history))
         for row, item in enumerate(reversed(history)):
-            table.setItem(row, 0, QtWidgets.QTableWidgetItem(item.get('timestamp', '')))
-            table.setItem(row, 1, QtWidgets.QTableWidgetItem(item.get('title', '')))
-            table.setItem(row, 2, QtWidgets.QTableWidgetItem(item.get('quality', '')))
-            table.setItem(row, 3, QtWidgets.QTableWidgetItem(item.get('save_path', '')))
+            # 时间
+            time_item = QtWidgets.QTableWidgetItem(item.get('timestamp', ''))
+            time_item.setFlags(time_item.flags() & ~QtCore.Qt.ItemIsEditable)  # 设置不可编辑
+            table.setItem(row, 0, time_item)
 
-        # 设置窗口布局
+            # 标题 - 使用自定义的带省略号的显示
+            title = item.get('title', '')
+            title_item = EllipsisTableWidgetItem(title)
+            title_item.setToolTip(title)  # 鼠标悬停显示完整标题
+            table.setItem(row, 1, title_item)
+
+            # 清晰度
+            quality_item = QtWidgets.QTableWidgetItem(item.get('quality', ''))
+            quality_item.setFlags(quality_item.flags() & ~QtCore.Qt.ItemIsEditable)
+            table.setItem(row, 2, quality_item)
+
+            # 保存路径
+            path_item = QtWidgets.QTableWidgetItem(item.get('save_path', ''))
+            path_item.setFlags(path_item.flags() & ~QtCore.Qt.ItemIsEditable)
+            table.setItem(row, 3, path_item)
+
+            # 删除按钮
+            delete_btn = QtWidgets.QPushButton("删除")
+            delete_btn.clicked.connect(lambda checked, r=row: self.delete_history_item(r, table))
+            table.setCellWidget(row, 4, delete_btn)
+
+        # 创建底部按钮
+        clear_all_btn = QtWidgets.QPushButton("清空记录")
+        clear_all_btn.clicked.connect(lambda: self.clear_all_history(table))
+
+        # 设置布局
         layout = QtWidgets.QVBoxLayout()
         layout.addWidget(table)
+        button_layout = QtWidgets.QHBoxLayout()
+        button_layout.addStretch()
+        button_layout.addWidget(clear_all_btn)
+        layout.addLayout(button_layout)
         history_dialog.setLayout(layout)
 
         history_dialog.exec_()
+
+    def delete_history_item(self, row, table):
+        """删除单条历史记录"""
+        reply = QtWidgets.QMessageBox.question(
+            self, '确认删除',
+            '确定要删除这条记录吗？',
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+            QtWidgets.QMessageBox.No
+        )
+
+        if reply == QtWidgets.QMessageBox.Yes:
+            history = self.load_history()
+            real_index = len(history) - 1 - row  # 由于显示是倒序的，需要计算实际索引
+            if 0 <= real_index < len(history):
+                history.pop(real_index)
+                self.save_history_list(history)
+                table.removeRow(row)
+
+    def clear_all_history(self, table):
+        """清空所有历史记录"""
+        reply = QtWidgets.QMessageBox.question(
+            self, '确认清空',
+            '确定要清空所有下载记录吗？此操作不可恢复！',
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+            QtWidgets.QMessageBox.No
+        )
+
+        if reply == QtWidgets.QMessageBox.Yes:
+            self.save_history_list([])  # 保存空列表
+            table.setRowCount(0)
+
+    def save_history_list(self, history):
+        """保存历史记录列表"""
+        try:
+            with open(self.history_file, 'w', encoding='utf-8') as f:
+                json.dump(history, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"保存历史记录失败: {e}")
+
+    def show_history_context_menu(self, pos, table):
+        """显示右键菜单"""
+        menu = QtWidgets.QMenu()
+        item = table.itemAt(pos)
+        if item:
+            row = item.row()
+            delete_action = menu.addAction("删除")
+            delete_action.triggered.connect(lambda: self.delete_history_item(row, table))
+
+        clear_action = menu.addAction("清空所有记录")
+        clear_action.triggered.connect(lambda: self.clear_all_history(table))
+
+        menu.exec_(table.viewport().mapToGlobal(pos))
 
     # 在 BiliDownloaderGUI 类中添加一个新的方法来打开目录
     def open_current_directory(self):
@@ -756,6 +873,31 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
                 background: #F54E50;
             }
         ''')
+
+        table_style = '''
+            QTableWidget {
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                background-color: white;
+            }
+            QTableWidget::item {
+                padding: 5px;
+                border-bottom: 1px solid #eee;
+            }
+            QTableWidget::item:selected {
+                background-color: #e6f3ff;
+                color: black;
+            }
+            QPushButton {
+                padding: 5px 10px;
+                border-radius: 3px;
+                background-color: #4A90E2;
+                color: white;
+            }
+            QPushButton:hover {
+                background-color: #357ABD;
+            }
+        '''
 
 
 def main():
