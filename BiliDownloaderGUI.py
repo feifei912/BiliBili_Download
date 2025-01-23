@@ -1,12 +1,17 @@
 import os
 import sys
 import json
+import time
+import asyncio
 import qtawesome
 from PyQt5 import QtCore, QtGui, QtWidgets
 from BiliVideoDownloader import BiliVideoDownloader
 
 
 class BiliDownloaderGUI(QtWidgets.QMainWindow):
+    # 定义类级别的信号
+    download_progress = QtCore.pyqtSignal(int, str)
+
     def __init__(self):
         # 首先调用父类的初始化
         super().__init__()
@@ -41,6 +46,14 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
         self.setup_content_area()
         self.init_style()
 
+        # 连接信号到更新函数
+        self.download_progress.connect(self.update_progress)
+
+    def update_progress(self, value, status):
+        """更新进度条和状态标签"""
+        self.progress.setValue(value)
+        self.status_label.setText(status)
+
     def load_config(self):
         """加载配置文件"""
         try:
@@ -58,6 +71,15 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
                 json.dump(self.config, f, ensure_ascii=False, indent=2)
         except Exception as e:
             print(f"保存配置文件失败: {e}")
+
+    def cleanup_temp_files(self, temp_dir):
+        """清理临时文件夹"""
+        try:
+            if os.path.exists(temp_dir):
+                import shutil
+                shutil.rmtree(temp_dir)
+        except Exception as e:
+            print(f"清理临时文件失败: {str(e)}")
 
     def setup_title_bar(self):
         """创建自定义标题栏，包含右上角控制按钮"""
@@ -391,19 +413,7 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
             QtWidgets.QMessageBox.critical(self, "错误", f"检查视频时出错：{str(e)}")
 
     def start_download(self):
-        """
-        开始下载视频
-        - 验证输入参数
-        - 设置下载进度
-        - 获取视频音频流
-        - 保存并合并文件
-        - 记录下载历史
-        - 错误时清理临时文件
-        """
-        temp_files = []  # 用于存储所有临时文件路径
-        part_files = []  # 用于存储分块文件路径
-        current_time = QtCore.QDateTime.currentDateTime().toString('yyyy-MM-dd hh:mm:ss')
-
+        """开始下载处理"""
         try:
             # 获取并验证必要的输入参数
             sessdata = self.sessdata_input.text().strip()
@@ -421,9 +431,14 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
                 QtWidgets.QMessageBox.warning(self, "警告", "请先检查视频并选择质量")
                 return
 
+            # 创建下载器实例并传入进度回调
+            self.downloader = BiliVideoDownloader(
+                progress_callback=lambda progress, status: self.download_progress.emit(progress, status)
+            )
+
             # 更新状态显示
             self.status_label.setText("正在下载...")
-            self.progress.setValue(20)
+            self.progress.setValue(0)
 
             # 设置下载器的cookie
             self.downloader.set_cookie(sessdata)
@@ -431,24 +446,46 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
             # 获取视频和音频流
             videore, audiore = self.downloader.video.get_video(bvid, pages=1, quality=quality)
 
-            # 更新下载进度
-            self.progress.setValue(50)
-            self.status_label.setText("正在保存文件...")
+            # 创建临时文件路径
+            temp_dir = os.path.join(save_path, '.temp')
+            os.makedirs(temp_dir, exist_ok=True)
+            filename_temp = os.path.join(temp_dir, str(int(time.time())))
 
-            # 保存视频和音频流到临时文件
-            filename_temp = self.downloader.save(save_path, videore, audiore)
-            # 添加临时文件到跟踪列表
-            temp_files.append(f"{filename_temp}.mp4")
-            temp_files.append(f"{filename_temp}.mp3")
-
-            # 更新合并进度
-            self.progress.setValue(80)
-            self.status_label.setText("正在合并音视频...")
-
-            # 获取视频标题并合并音视频文件
+            # 获取视频标题
             title = self.downloader.get_title(bvid)
             final_path = os.path.join(save_path, title)
-            self.downloader.merge_videos(filename_temp, final_path)
+
+            # 开始下载
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                success = loop.run_until_complete(
+                    self.downloader.download_both(filename_temp, videore, audiore)
+                )
+            finally:
+                loop.close()
+
+            if not success:
+                raise Exception("下载失败")
+
+            # 在合并之前直接发送进度信号
+            self.download_progress.emit(90, "正在合并视频，请稍后...")
+            QtWidgets.QApplication.processEvents()  # 确保UI更新
+
+            # 合并视频
+            if not self.downloader.merge_videos(filename_temp, final_path):
+                raise Exception("合并失败")
+
+            # 合并完成后发送完成信号
+            self.download_progress.emit(100, "下载完成！")
+
+            # 清理临时文件夹
+            try:
+                if os.path.exists(temp_dir):
+                    import shutil
+                    shutil.rmtree(temp_dir)
+            except Exception as e:
+                print(f"清理临时文件夹失败: {str(e)}")
 
             # 保存下载历史记录
             download_info = {
@@ -456,35 +493,22 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
                 'quality': f"{self.quality_combo.currentText()}",
                 'save_path': save_path,
                 'bvid': bvid,
-                'download_time': current_time
+                'timestamp': QtCore.QDateTime.currentDateTime().toString('yyyy-MM-dd hh:mm:ss')
             }
             self.save_history(download_info)
 
-            # 更新完成状态
-            self.progress.setValue(100)
-            self.status_label.setText("下载完成！")
+            # 保存新的配置
+            self.config['last_save_path'] = save_path
+            self.save_config()
 
             # 显示成功消息
-            success_message = f"视频下载完成！\n保存位置：{final_path}"
+            success_message = f"视频下载完成！\n保存位置：{final_path}.mp4"
             QtWidgets.QMessageBox.information(self, "成功", success_message)
 
         except Exception as e:
-            # 发生错误时的处理
+            # 更新失败状态
             self.status_label.setText("下载失败")
             self.progress.setValue(0)
-
-            # 清理所有临时文件
-            def cleanup_files(file_list):
-                for file in file_list:
-                    try:
-                        if os.path.exists(file):
-                            os.remove(file)
-                            print(f"已删除临时文件: {file}")
-                    except Exception as del_err:
-                        print(f"删除临时文件失败: {file}, 错误: {str(del_err)}")
-
-            # 清理临时文件
-            cleanup_files(temp_files)
 
             # 显示详细的错误信息
             error_message = (
@@ -497,22 +521,13 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
                 "\n建议：\n"
                 "- 检查网络连接\n"
                 "- 确保有足够的存储空间\n"
-                "- 尝试下载较低质量的视频"
+                "- 尝试下载较低质量的视频\n"
+                "- 更新SESSDATA"
             )
             QtWidgets.QMessageBox.critical(self, "错误", error_message)
 
             # 打印错误日志
             print(f"下载失败 - BV号: {bvid}, 错误信息: {str(e)}")
-
-        finally:
-            # 最后一次确保清理所有临时文件
-            for file in temp_files:
-                try:
-                    if os.path.exists(file):
-                        os.remove(file)
-                        print(f"清理临时文件: {file}")
-                except Exception as del_err:
-                    print(f"清理临时文件失败: {file}, 错误: {str(del_err)}")
 
     def init_style(self):
         """设置窗口样式"""

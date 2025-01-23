@@ -9,65 +9,198 @@ from concurrent.futures import ThreadPoolExecutor
 
 
 class BiliVideoDownloader:
-    def __init__(self):
+    def __init__(self, progress_callback=None):
         self.video = Video()
         self.error_download = []
+        self.progress_callback = progress_callback
 
     def set_cookie(self, sess_data):
+        """设置cookie"""
         self.video.cookies = {"SESSDATA": sess_data}
 
-    def download_video(self, bvid, directory, quality=80, pages=1):
-        """下载单个或多个视频"""
-        if not self.inspect_bvid(bvid):
-            print('无效的BV号')
+    async def download_file(self, url, filename, headers, cookies, description, progress_callback):
+        """
+        下载单个文件
+        Args:
+            url: 下载链接
+            filename: 保存的文件名
+            headers: 请求头
+            cookies: cookie信息
+            description: 下载描述（用于显示进度）
+            progress_callback: 进度回调函数
+        Returns:
+            bool: 下载是否成功
+        """
+        total_size = 0
+        downloaded = [0]
+        part_files = []
+        max_retries = 5
+        base_chunk_size = 1024 * 1024  # 1MB
+        max_concurrent_downloads = 8
+        download_timeout = 30
+        semaphore = asyncio.Semaphore(max_concurrent_downloads)
+
+        async def get_content_length():
+            """获取文件总大小"""
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.head(url, headers=headers, cookies=cookies) as response:
+                        return int(response.headers.get('content-length', 0))
+            except Exception as e:
+                print(f"获取文件大小失败: {str(e)}")
+                return 0
+
+        async def download_chunk(start, end, chunk_index):
+            """
+            下载文件块
+            Args:
+                start: 开始位置
+                end: 结束位置
+                chunk_index: 块索引
+            """
+            part_file = f"{filename}.part{chunk_index}"
+            part_files.append(part_file)
+
+            async with semaphore:
+                for retry in range(max_retries):
+                    try:
+                        chunk_headers = headers.copy()
+                        chunk_headers['Range'] = f'bytes={start}-{end}'
+
+                        timeout = aiohttp.ClientTimeout(total=download_timeout * (retry + 1))
+                        async with aiohttp.ClientSession(timeout=timeout) as session:
+                            async with session.get(url, headers=chunk_headers, cookies=cookies) as response:
+                                if response.status != 206:
+                                    raise Exception(f"服务器不支持断点续传: {response.status}")
+
+                                async with aiofiles.open(part_file, 'wb') as f:
+                                    async for data in response.content.iter_chunked(base_chunk_size):
+                                        if data:
+                                            await f.write(data)
+                                            downloaded[0] += len(data)
+                                            if total_size:
+                                                percentage = min(100, downloaded[0] * 100 / total_size)
+                                                if progress_callback:
+                                                    try:
+                                                        await progress_callback(percentage,
+                                                                                f"{description}: {percentage:.1f}%")
+                                                    except Exception as e:
+                                                        print(f"进度回调出错: {str(e)}")
+                                            await asyncio.sleep(0.001)
+                                return True
+
+                    except Exception as e:
+                        if retry < max_retries - 1:
+                            wait_time = (retry + 1) * 2  # 指数退避
+                            print(f"\n下载块 {chunk_index} 失败: {str(e)}, {wait_time}秒后重试...")
+                            await asyncio.sleep(wait_time)
+                        else:
+                            print(f"\n下载块 {chunk_index} 最终失败: {str(e)}")
+                            raise
+
+        try:
+            # 确保目标目录存在
+            os.makedirs(os.path.dirname(filename), exist_ok=True)
+
+            # 获取文件大小
+            total_size = await get_content_length()
+            if total_size == 0:
+                raise Exception("无法获取文件大小")
+
+            # 根据文件大小动态调整分块
+            chunk_size = max(total_size // 32, 5 * 1024 * 1024)  # 最小5MB
+            chunk_count = (total_size + chunk_size - 1) // chunk_size
+
+            # 创建下载任务
+            tasks = []
+            for i in range(chunk_count):
+                start = i * chunk_size
+                end = min(start + chunk_size - 1, total_size - 1)
+                tasks.append(download_chunk(start, end, i))
+
+            # 执行所有下载任务
+            await asyncio.gather(*tasks)
+
+            # 合并文件块
+            async with aiofiles.open(filename, 'wb') as outfile:
+                for i in range(chunk_count):
+                    part_file = f"{filename}.part{i}"
+                    if os.path.exists(part_file):
+                        async with aiofiles.open(part_file, 'rb') as infile:
+                            while True:
+                                chunk = await infile.read(base_chunk_size)
+                                if not chunk:
+                                    break
+                                await outfile.write(chunk)
+                                await asyncio.sleep(0.001)  # 避免阻塞
+
+            return True
+
+        except Exception as e:
+            print(f"\n下载失败: {str(e)}")
             return False
 
-        # 确保目录存在
-        if not self.is_directory_exist(directory):
-            os.makedirs(directory)
-            if not self.is_directory_exist(directory):
-                print('无效的目录')
-                return False
+        finally:
+            # 清理分块文件
+            for part_file in part_files:
+                try:
+                    if os.path.exists(part_file):
+                        os.remove(part_file)
+                except Exception as e:
+                    print(f"清理分块文件失败: {str(e)}")
 
-        # 如果是合集，创建目录
-        if pages > 1:
-            directory = os.path.join(directory, self.get_title(bvid))
-            if not os.path.exists(directory):
-                os.makedirs(directory)
-
-        # 下载视频
-        for page in range(1, pages + 1):
-            print(f"\n正在处理视频 {page} 的 {pages}")
-            self.download_single_video(bvid, directory, quality, page)
-
-        if self.error_download:
-            print(f"BV: {bvid} 下载失败的页面: {self.error_download}")
-        else:
-            print(f"BV: {bvid} 所有下载已完成")
-
-    def download_single_video(self, bvid, directory, quality, page=1):
-        """下载单个视频"""
+    async def download_both(self, filename_temp, videore, audiore):
+        """
+        下载视频和音频文件
+        """
         try:
-            # 获取视频和音频流
-            videore, audiore = self.video.get_video(bvid, pages=page, quality=quality)
-            total_size = self.get_bit(videore, audiore)
-            print(f"BV: {bvid} 页面: {page} 状态: 下载中, 质量: {quality}, 大小: {self.size(total_size)}")
+            async def progress_wrapper(progress, status, file_type):
+                if file_type == "audio":
+                    # 音频下载占20%
+                    total_progress = progress * 0.2
+                else:  # video
+                    # 视频下载占70% (20-90%)
+                    total_progress = 20 + (progress * 0.7)
 
-            # 下载并合并
-            filename_temp = self.save(directory, videore, audiore)
-            print(f"BV: {bvid} 页面: {page} 状态: 正在合并文件...")
+                if self.progress_callback:
+                    self.progress_callback(int(total_progress), status)
 
-            title = self.get_title_collection(bvid, page) if page > 1 else self.get_title(bvid)
-            self.merge_videos(filename_temp, os.path.join(directory, title))
-            print(f"BV: {bvid} 页面: {page} 状态: 完成")
+            # 先下载音频
+            audio_success = await self.download_file(
+                audiore.url,
+                f"{filename_temp}.mp3",
+                self.video.headers,
+                self.video.cookies,
+                "音频下载",
+                lambda p, s: progress_wrapper(p, s, "audio")
+            )
+
+            if not audio_success:
+                raise Exception("音频下载失败")
+
+            # 下载视频
+            video_success = await self.download_file(
+                videore.url,
+                f"{filename_temp}.mp4",
+                self.video.headers,
+                self.video.cookies,
+                "视频下载",
+                lambda p, s: progress_wrapper(p, s, "video")
+            )
+
+            if not video_success:
+                raise Exception("视频下载失败")
+
             return True
+
         except Exception as e:
-            print(f"下载视频时出错: {str(e)}")
-            self.error_download.append(page)
+            print(f"下载失败: {str(e)}")
             return False
 
     def merge_videos(self, filename_temp, filename_new):
-        """合并视频和音频文件"""
+        """
+        合并视频和音频文件
+        """
         try:
             import subprocess
             video_path = f"{filename_temp}.mp4"
@@ -95,14 +228,18 @@ class BiliVideoDownloader:
             stdout, stderr = process.communicate()
 
             if process.returncode != 0:
-                self.cleanup_file_parts(filename_temp)
                 raise Exception(f"FFmpeg失败: {stderr.decode()}")
 
             # 清理临时文件
-            self.cleanup_file_parts(filename_temp)
+            try:
+                os.remove(video_path)
+                os.remove(audio_path)
+            except Exception as e:
+                print(f"清理临时文件失败: {str(e)}")
+
+            return True
 
         except Exception as e:
-            self.cleanup_file_parts(filename_temp)
             print(f"合并失败: {str(e)}")
             return False
 
@@ -323,10 +460,6 @@ class Video:
         }
         # 初始化 cookies
         self.cookies = {}
-
-    def set_cookie(self, cookie):
-        """ 设置cookie """
-        self.cookies = {"SESSDATA": cookie}
 
     def get_info(self, bvid):
         """ 获取视频信息 """
