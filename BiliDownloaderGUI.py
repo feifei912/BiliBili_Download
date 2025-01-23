@@ -197,7 +197,7 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
         self.sessdata_input = QtWidgets.QLineEdit()
         self.sessdata_input.setPlaceholderText("请输入SESSDATA")
 
-        # 添加保存cookie的复选框，调整位置使其与SESSDATA输入框对齐
+        # 添加保存cookie的复选框
         self.save_cookie_checkbox = QtWidgets.QCheckBox("记住cookie（不建议在公共设备上使用）")
         self.save_cookie_checkbox.setObjectName("save_cookie_checkbox")
         # 根据配置设置复选框状态
