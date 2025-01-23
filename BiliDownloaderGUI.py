@@ -8,7 +8,6 @@ import subprocess
 from PyQt5 import QtCore, QtGui, QtWidgets
 from BiliVideoDownloader import BiliVideoDownloader
 
-
 class EllipsisTableWidgetItem(QtWidgets.QTableWidgetItem):
     def __init__(self, text):
         super().__init__()
