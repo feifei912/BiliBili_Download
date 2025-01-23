@@ -154,7 +154,7 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
         self.left_button_1.setStyleSheet("color: black;")
         self.left_button_1.clicked.connect(self.start_download)
 
-        self.left_button_2 = QtWidgets.QPushButton(qtawesome.icon('fa.folder-open', color='black'), "保存目录")
+        self.left_button_2 = QtWidgets.QPushButton(qtawesome.icon('fa.folder-open', color='black'), "打开目录")
         self.left_button_2.setObjectName('left_button')
         self.left_button_2.setStyleSheet("color: black;")
         self.left_button_2.clicked.connect(self.browse_path)
