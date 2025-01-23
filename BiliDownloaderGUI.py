@@ -16,6 +16,14 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
         # 首先调用父类的初始化
         super().__init__()
 
+        # 设置程序图标
+        icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'favicon.ico')
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QtGui.QIcon(icon_path))
+        else:
+            # 如果没有找到图标文件，使用 qtawesome 的图标作为备选
+            self.setWindowIcon(qtawesome.icon('fa.download', color='#4A90E2'))
+
         # 初始化所有实例变量
         self.downloader = BiliVideoDownloader()
         self.m_flag = False
