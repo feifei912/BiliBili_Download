@@ -4,6 +4,7 @@ import json
 import time
 import asyncio
 import qtawesome
+import subprocess
 from PyQt5 import QtCore, QtGui, QtWidgets
 from BiliVideoDownloader import BiliVideoDownloader
 
@@ -165,7 +166,7 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
         self.left_button_2 = QtWidgets.QPushButton(qtawesome.icon('fa.folder-open', color='black'), "打开目录")
         self.left_button_2.setObjectName('left_button')
         self.left_button_2.setStyleSheet("color: black;")
-        self.left_button_2.clicked.connect(self.browse_path)
+        self.left_button_2.clicked.connect(self.open_current_directory)
 
         # 添加历史记录按钮
         self.left_button_3 = QtWidgets.QPushButton(qtawesome.icon('fa.history', color='black'), "下载历史")
@@ -175,8 +176,8 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
 
         # 将按钮和标签添加到左侧布局中
         self.left_layout.addWidget(self.left_label_1, 0, 0, 1, 1)
-        self.left_layout.addWidget(self.left_button_1, 2, 0, 1, 1)
-        self.left_layout.addWidget(self.left_button_2, 1, 0, 1, 1)
+        self.left_layout.addWidget(self.left_button_1, 1, 0, 1, 1)
+        self.left_layout.addWidget(self.left_button_2, 2, 0, 1, 1)
         self.left_layout.addWidget(self.left_button_3, 3, 0, 1, 1)
 
         # 将左侧组件添加到主布局中
@@ -364,7 +365,7 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
         # 创建历史记录窗口
         history_dialog = QtWidgets.QDialog(self)
         history_dialog.setWindowTitle("下载历史")
-        history_dialog.setMinimumWidth(500)
+        history_dialog.setMinimumWidth(700)
         history_dialog.setMinimumHeight(400)
 
         # 创建表格并设置列
@@ -388,6 +389,21 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
         history_dialog.setLayout(layout)
 
         history_dialog.exec_()
+
+    # 在 BiliDownloaderGUI 类中添加一个新的方法来打开目录
+    def open_current_directory(self):
+        """打开当前设置的下载目录"""
+        current_path = self.path_input.text().strip()
+        if os.path.exists(current_path):
+            # 根据不同的操作系统使用不同的命令打开文件夹
+            if sys.platform == 'win32':
+                os.startfile(current_path)
+            elif sys.platform == 'darwin':  # macOS
+                subprocess.Popen(['open', current_path])
+            else:  # linux
+                subprocess.Popen(['xdg-open', current_path])
+        else:
+            QtWidgets.QMessageBox.warning(self, "警告", "目录不存在！")
 
     def check_video(self):
         """检查视频信息"""
