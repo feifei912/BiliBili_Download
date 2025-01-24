@@ -439,6 +439,9 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
             delete_btn.clicked.connect(lambda checked, r=row: self.delete_history_item(r, table))
             table.setCellWidget(row, 4, delete_btn)
 
+        # 调用刷新删除按钮函数
+        self.refresh_delete_buttons(table)
+
         # 创建底部按钮
         clear_all_btn = QtWidgets.QPushButton("清空记录")
         clear_all_btn.clicked.connect(lambda: self.clear_all_history(table))
@@ -470,6 +473,18 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
                 history.pop(real_index)
                 self.save_history_list(history)
                 table.removeRow(row)
+                # 重新设置删除按钮连接
+                self.refresh_delete_buttons(table)
+
+    # 添加refresh_delete_buttons方法
+    def refresh_delete_buttons(self, table):
+        """重新设置删除按钮连接"""
+        row_count = table.rowCount()
+        for row in range(row_count):
+            delete_btn = table.cellWidget(row, 4)
+            if delete_btn:
+                delete_btn.clicked.disconnect()
+                delete_btn.clicked.connect(lambda checked, r=row: self.delete_history_item(r, table))
 
     def clear_all_history(self, table):
         """清空所有历史记录"""
