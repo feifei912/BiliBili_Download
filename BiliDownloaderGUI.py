@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import json
 import time
@@ -104,6 +105,21 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
                 json.dump(self.config, f, ensure_ascii=False, indent=2)
         except Exception as e:
             print(f"保存配置文件失败: {e}")
+
+    def extract_bv_number(self, input_str):
+        """提取BV号"""
+        bv_pattern = re.compile(r'BV[a-zA-Z0-9]{10}')
+
+        # 检查输入是否是BV号
+        if bv_pattern.match(input_str):
+            return input_str
+
+        # 如果输入是链接，从链接中提取BV号
+        match = bv_pattern.search(input_str)
+        if match:
+            return match.group(0)
+
+        raise ValueError("输入的字符串中未找到有效的BV号")
 
     def cleanup_temp_files(self, temp_dir):
         """清理临时文件夹"""
@@ -540,10 +556,13 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
         """检查视频信息"""
         try:
             sessdata = self.sessdata_input.text().strip()
-            bvid = self.bv_input.text().strip()
-            if not sessdata or not bvid:
-                QtWidgets.QMessageBox.warning(self, "警告", "请输入SESSDATA和BV号")
+            input_str = self.bv_input.text().strip()
+            if not sessdata or not input_str:
+                QtWidgets.QMessageBox.warning(self, "警告", "请输入SESSDATA和BV号或链接")
                 return
+
+            # 提取BV号
+            bvid = self.extract_bv_number(input_str)
 
             # 保存cookie配置
             self.config['save_cookie'] = self.save_cookie_checkbox.isChecked()
@@ -595,13 +614,16 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
         try:
             # 获取并验证必要的输入参数
             sessdata = self.sessdata_input.text().strip()
-            bvid = self.bv_input.text().strip()
+            input_str = self.bv_input.text().strip()
             save_path = self.path_input.text().strip()
 
             # 检查必要参数是否完整
-            if not all([sessdata, bvid, save_path]):
+            if not all([sessdata, input_str, save_path]):
                 QtWidgets.QMessageBox.warning(self, "警告", "请填写所有必要信息")
                 return
+
+            # 提取BV号
+            bvid = self.extract_bv_number(input_str)
 
             # 保存cookie配置
             self.config['save_cookie'] = self.save_cookie_checkbox.isChecked()
@@ -654,7 +676,7 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
             if not success:
                 raise Exception("下载失败")
 
-            # 在合并之前直接发送进度信号
+            # 在合并之前直接发送进度信信号
             self.download_progress.emit(90, "正在合并视频，请稍后...")
             QtWidgets.QApplication.processEvents()  # 确保UI更新
 
