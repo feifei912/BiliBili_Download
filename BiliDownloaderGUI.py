@@ -345,10 +345,14 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
         ffmpeg_layout = QtWidgets.QGridLayout(ffmpeg_widget)
         ffmpeg_label = QtWidgets.QLabel("请确保已经下载安装ffmpeg")
         ffmpeg_label.setObjectName('ffmpeg_label')
+
         check_ffmpeg_button = QtWidgets.QPushButton("检测是否已安装")
+        check_ffmpeg_button.setIcon(qtawesome.icon('fa.search', color='white'))
         check_ffmpeg_button.setObjectName('check_ffmpeg_button')
         check_ffmpeg_button.clicked.connect(self.check_ffmpeg)
+
         download_ffmpeg_button = QtWidgets.QPushButton("下载安装")
+        download_ffmpeg_button.setIcon(qtawesome.icon('fa.download', color='white'))
         download_ffmpeg_button.setObjectName('download_ffmpeg_button')
         download_ffmpeg_button.clicked.connect(self.download_ffmpeg)
 
@@ -364,50 +368,158 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
 
     def setup_instruction_area(self):
         """设置使用说明区域"""
+        # 创建主容器
+        instruction_container = QtWidgets.QWidget()
+        instruction_layout = QtWidgets.QVBoxLayout(instruction_container)
+        instruction_layout.setContentsMargins(20, 20, 20, 20)
+        instruction_layout.setSpacing(15)
+
+        # 创建说明文本编辑器
         instruction_text = QtWidgets.QTextEdit()
         instruction_text.setReadOnly(True)
-        instruction_text.setHtml("""
-            <h2>哔哩哔哩下载器使用说明</h2>
-            <p>1. 获取SESSDATA:</p>
-            <ul>
-                <li>登录bilibili网站</li>
-                <li>按F12打开开发者工具</li>
-                <li>找到Application/Cookie</li>
-                <li>复制SESSDATA的值</li>
-            </ul>
-            <p>2. 下载视频:</p>
-            <ul>
-                <li>点击"配置"按钮打开配置界面</li>
-                <li>输入SESSDATA和视频BV号</li>
-                <li>点击"检查视频"获取视频信息</li>
-                <li>选择视频质量和保存路径</li>
-                <li>点击"开始下载"按钮开始下载</li>
-            </ul>
-            <p>3. 其他功能:</p>
-            <ul>
-                <li>"打开目录": 打开当前下载目录</li>
-                <li>"下载历史": 查看历史下载记录</li>
-            </ul>
+        instruction_text.setStyleSheet("""
+            QTextEdit {
+                border: 1px solid #E5E5E5;
+                border-radius: 8px;
+                padding: 15px;
+                background-color: #FFFFFF;
+                font-family: "Microsoft YaHei", Arial, sans-serif;
+                line-height: 1.6;
+            }
+            QTextEdit:focus {
+                border-color: #4A90E2;
+            }
         """)
 
-        # FFmpeg信息和按钮区域
-        ffmpeg_widget = QtWidgets.QWidget()
-        ffmpeg_layout = QtWidgets.QGridLayout(ffmpeg_widget)
-        ffmpeg_label = QtWidgets.QLabel("请确保已经下载安装ffmpeg")
-        ffmpeg_label.setObjectName('ffmpeg_label')
-        check_ffmpeg_button = QtWidgets.QPushButton("检测是否已安装")
-        check_ffmpeg_button.setObjectName('check_ffmpeg_button')
-        check_ffmpeg_button.clicked.connect(self.check_ffmpeg)
-        download_ffmpeg_button = QtWidgets.QPushButton("下载安装")
-        download_ffmpeg_button.setObjectName('download_ffmpeg_button')
-        download_ffmpeg_button.clicked.connect(self.download_ffmpeg)
+        # HTML内容，使用更现代的样式
+        html_content = """
+        <style>
+            body {
+                font-family: "Microsoft YaHei", Arial, sans-serif;
+                line-height: 1.6;
+                color: #333;
+            }
+            h2 {
+                color: #2B2B2B;
+                border-bottom: 2px solid #4A90E2;
+                padding-bottom: 8px;
+                margin-bottom: 20px;
+            }
+            .section {
+                margin-bottom: 20px;
+                padding: 15px;
+                background: #F8F9FA;
+                border-radius: 8px;
+            }
+            .section-title {
+                color: #4A90E2;
+                font-weight: bold;
+                margin-bottom: 10px;
+                font-size: 16px;
+            }
+            ul {
+                margin: 0;
+                padding-left: 20px;
+            }
+            li {
+                margin: 8px 0;
+            }
+            .highlight {
+                background-color: #FFF3CD;
+                padding: 2px 5px;
+                border-radius: 3px;
+            }
+            .note {
+                color: #856404;
+                background-color: #FFF3CD;
+                border: 1px solid #FFEEBA;
+                padding: 10px;
+                border-radius: 5px;
+                margin: 10px 0;
+            }
+            .author-section {
+                background: #E8F4FE;
+                padding: 15px;
+                border-radius: 8px;
+                margin-top: 20px;
+            }
+            a {
+                color: #4A90E2;
+                text-decoration: none;
+            }
+            a:hover {
+                text-decoration: underline;
+            }
+        </style>
 
-        ffmpeg_layout.addWidget(ffmpeg_label, 0, 0, 1, 2)
-        ffmpeg_layout.addWidget(check_ffmpeg_button, 0, 2)
-        ffmpeg_layout.addWidget(download_ffmpeg_button, 0, 3)
+        <h2>哔哩哔哩下载器使用说明</h2>
 
-        self.instruction_layout.addWidget(instruction_text)
-        self.instruction_layout.addWidget(ffmpeg_widget)
+        <div class="section">
+            <div class="section-title">1. 获取Cookie(SESSDATA)</div>
+            <ul>
+                <li>登录bilibili网站</li>
+                <li>按<span class="highlight">F12</span>打开开发者工具</li>
+                <li>找到 <span class="highlight">Network(网络)</span> 标签，在左侧的<span class="highlight">Name(名称)</span>中选择<span class="highlight">web?</span>开头的请求</li>
+                <li>在 <span class="highlight">Headers(标头)</span> 下找到 <span class="highlight">Request Headers(请求标头)</span></li>
+                <li>在 <span class="highlight">Cookie</span> 中复制 <span class="highlight">SESSDATA</span> 的值</li>
+            </ul>
+            <div class="note">
+                • 若无法找到<strong>web?</strong>开头的请求，请点击首页的轮播图更换一张轮播图<br>
+                • <strong>SESSDATA</strong>中需要复制的是"SESSDATA=xxxxxx;"中的<strong>"xxxxxx"</strong>部分<br>
+                • 请勿分享您的Cookie(SESSDATA)给陌生人，以免造成账号安全问题
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">2. FFmpeg安装</div>
+            <ul>
+                <li>使用配置页面下方按钮检测FFmpeg是否已安装</li>
+                <li>如未安装，点击配置页面下方的"下载安装"按钮进行安装</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <div class="section-title">3. 下载视频</div>
+            <ul>
+                <li>点击"配置"按钮打开配置界面</li>
+                <li>输入SESSDATA和视频BV号或链接</li>
+                <li>点击"检查视频"获取视频信息</li>
+                <li>选择视频质量和保存路径</li>
+            </ul>
+            <div class="note">
+                <strong>清晰度说明：</strong><br>
+                • 无Cookie：仅支持480P及以下清晰度<br>
+                • 普通用户：最高支持1080P清晰度<br>
+                • 大会员：支持1080P高帧率及以上清晰度
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">4. 实用功能</div>
+            <ul>
+                <li><strong>打开目录</strong>：快速访问下载文件夹</li>
+                <li><strong>下载历史</strong>：查看和管理历史下载记录</li>
+                <li><strong>记住Cookie</strong>：可选择保存SESSDATA（请勿在公共设备使用）</li>
+            </ul>
+        </div>
+
+        <div class="author-section">
+            <div class="section-title">5. 关于作者 ( • ̀ω•́ )✧</div>
+            <ul>
+                <li>作者：feifei912</li>
+                <li>项目主页：https://github.com/feifei912/BiliBili_Download</li>
+                <li>欢迎Star和Fork(〃'▽'〃)</li>
+            </ul>
+        </div>
+        """
+
+        instruction_text.setHtml(html_content)
+
+        # 将组件添加到主布局
+        instruction_layout.addWidget(instruction_text)
+
+        # 将主容器添加到说明页面布局
+        self.instruction_layout.addWidget(instruction_container)
 
     def show_config(self):
         """显示配置界面"""
