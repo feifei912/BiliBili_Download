@@ -15,6 +15,7 @@
 - [技术特性](#技术特性) 
 - [软件架构](#软件架构)
 - [安装说明](#安装说明)
+- [程序界面](#程序界面)
 - [使用教程](#使用教程)
 - [常见问题](#常见问题)
 - [更新日志](#更新日志)
@@ -89,6 +90,20 @@ aiohttp>=3.8.0
 aiofiles>=0.8.0
 qtawesome>=1.0.0
 ```
+
+## 程序界面
+
+#### 配置界面
+![image](https://github.com/user-attachments/assets/20978fdb-858e-4c1a-9dea-1a6777975c27)
+
+#### 下载历史界面
+![image](https://github.com/user-attachments/assets/51115e35-4ac8-4cda-a320-412c75080e0a)
+
+#### 使用说明界面
+![image](https://github.com/user-attachments/assets/2f39865b-41f8-4125-a2c9-17e392b6662a)
+![image](https://github.com/user-attachments/assets/8517ecd6-00c7-4db5-a984-010ae9eb4bca)
+
+
 
 ## 使用教程
 
