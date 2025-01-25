@@ -458,7 +458,7 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
             <div class="section-title">1. 获取Cookie(SESSDATA)</div>
             <ul>
                 <li>登录bilibili网站</li>
-                <li>按<span class="highlight">F12</span>打开开发者工具</li>
+                <li>在B站主页按<span class="highlight">F12</span>打开开发者工具</li>
                 <li>找到 <span class="highlight">Network(网络)</span> 标签，在左侧的<span class="highlight">Name(名称)</span>中选择<span class="highlight">web?</span>开头的请求</li>
                 <li>在 <span class="highlight">Headers(标头)</span> 下找到 <span class="highlight">Request Headers(请求标头)</span></li>
                 <li>在 <span class="highlight">Cookie</span> 中复制 <span class="highlight">SESSDATA</span> 的值</li>
