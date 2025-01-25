@@ -474,7 +474,8 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
             <div class="section-title">2. FFmpeg安装</div>
             <ul>
                 <li>使用配置页面下方按钮检测FFmpeg是否已安装</li>
-                <li>如未安装，点击配置页面下方的"下载安装"按钮进行安装</li>
+                <li>如未安装，点击配置页面下方的<span class="highlight">"下载安装"</span>按钮进行安装</li>
+                <li><strong>注意：首次下载安装可能需要较长时间，请耐心等待FFmpeg下载完成</strong></li>
             </ul>
         </div>
 
