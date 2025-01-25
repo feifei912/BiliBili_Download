@@ -27,16 +27,23 @@ class FFmpegManager:
     def check_system_ffmpeg(self):
         """检查系统是否已安装FFmpeg"""
         try:
+            # 准备subprocess参数
+            kwargs = {
+                'capture_output': True,
+                'text': True
+            }
+            if platform.system() == 'Windows':
+                kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
+
             # 检查环境变量中的ffmpeg
-            result = subprocess.run(['ffmpeg', '-version'],
-                                    capture_output=True,
-                                    text=True)
+            result = subprocess.run(['ffmpeg', '-version'], **kwargs)
             if result.returncode == 0:
                 # 获取实际的ffmpeg路径
                 if platform.system() == 'Windows':
-                    result = subprocess.run(['where', 'ffmpeg'],
-                                            capture_output=True,
-                                            text=True)
+                    result = subprocess.run(
+                        ['where', 'ffmpeg'],
+                        **kwargs
+                    )
                     if result.returncode == 0:
                         return result.stdout.strip().split('\n')[0]
             return None

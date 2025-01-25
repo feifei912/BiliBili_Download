@@ -5,6 +5,7 @@ import asyncio
 import aiohttp
 import aiofiles
 import requests
+import platform
 from concurrent.futures import ThreadPoolExecutor
 
 
@@ -219,12 +220,15 @@ class BiliVideoDownloader:
                 f"{filename_new}.mp4"
             ]
 
-            process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE
-            )
+            # 准备subprocess参数
+            kwargs = {
+                'stdout': subprocess.PIPE,
+                'stderr': subprocess.PIPE
+            }
+            if platform.system() == 'Windows':
+                kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
 
+            process = subprocess.Popen(cmd, **kwargs)
             stdout, stderr = process.communicate()
 
             if process.returncode != 0:
@@ -238,6 +242,10 @@ class BiliVideoDownloader:
                 print(f"清理临时文件失败: {str(e)}")
 
             return True
+
+        except Exception as e:
+            print(f"合并失败: {str(e)}")
+            return False
 
         except Exception as e:
             print(f"合并失败: {str(e)}")
