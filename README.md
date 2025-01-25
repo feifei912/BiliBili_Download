@@ -116,6 +116,7 @@ python BiliDownloaderGUI.py
 - 优化下载链接逻辑
 - 美化图形界面设计
 - 添加使用说明
+- 添加FFmpeg检测以及下载安装功能
 
 ## 许可证
 
