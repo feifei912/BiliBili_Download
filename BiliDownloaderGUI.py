@@ -192,10 +192,11 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
         self.left_layout = QtWidgets.QGridLayout()
         self.left_widget.setLayout(self.left_layout)
 
-        # 左侧标签
-        self.left_label_1 = QtWidgets.QPushButton("配置列表")
-        self.left_label_1.setObjectName('left_label')
-        self.left_label_1.setStyleSheet("color: black;")
+        # 修改配置列表为按钮
+        self.config_button = QtWidgets.QPushButton(qtawesome.icon('fa.cog', color='black'), "配置")
+        self.config_button.setObjectName('left_button')
+        self.config_button.setStyleSheet("color: black;")
+        self.config_button.clicked.connect(self.show_config)
 
         # 左侧按钮
         self.left_button_1 = QtWidgets.QPushButton(qtawesome.icon('fa.download', color='black'), "开始下载")
@@ -214,11 +215,18 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
         self.left_button_3.setStyleSheet("color: black;")
         self.left_button_3.clicked.connect(self.show_history)
 
-        # 将按钮和标签添加到左侧布局中
-        self.left_layout.addWidget(self.left_label_1, 0, 0, 1, 1)
+        # 添加使用说明按钮
+        self.help_button = QtWidgets.QPushButton(qtawesome.icon('fa.question-circle', color='black'), "使用说明")
+        self.help_button.setObjectName('left_button')
+        self.help_button.setStyleSheet("color: black;")
+        self.help_button.clicked.connect(self.show_instructions)
+
+        # 将按钮添加到左侧布局中
+        self.left_layout.addWidget(self.config_button, 0, 0, 1, 1)
         self.left_layout.addWidget(self.left_button_1, 1, 0, 1, 1)
         self.left_layout.addWidget(self.left_button_2, 2, 0, 1, 1)
         self.left_layout.addWidget(self.left_button_3, 3, 0, 1, 1)
+        self.left_layout.addWidget(self.help_button, 4, 0, 1, 1)
 
         # 将左侧组件添加到主布局中
         self.content_layout.addWidget(self.left_widget, 0, 0, 12, 3)
@@ -227,14 +235,150 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
         """右侧面板包含输入框、下载选项和进度条"""
         self.right_widget = QtWidgets.QWidget()
         self.right_widget.setObjectName('right_widget')
-        self.right_layout = QtWidgets.QGridLayout()
-        self.right_widget.setLayout(self.right_layout)
+        self.right_layout = QtWidgets.QGridLayout(self.right_widget)
 
-        self.setup_input_area()
-        self.setup_download_options()
-        self.setup_progress_area()
+        # 创建并添加 QStackedWidget
+        self.right_stack = QtWidgets.QStackedWidget()
+        self.right_layout.addWidget(self.right_stack, 0, 0)
+
+        # 创建配置页面
+        self.config_widget = QtWidgets.QWidget()
+        self.config_widget.setObjectName('config_widget')  # 添加对象名，用于样式设置
+        self.config_layout = QtWidgets.QGridLayout(self.config_widget)
+
+        # 将所有配置相关的组件添加到配置页面
+        self.setup_config_page()
+        self.right_stack.addWidget(self.config_widget)
+
+        # 创建说明页面
+        self.instruction_widget = QtWidgets.QWidget()
+        self.instruction_widget.setObjectName('instruction_widget')  # 添加对象名，用于样式设置
+        self.instruction_layout = QtWidgets.QVBoxLayout(self.instruction_widget)
+        self.setup_instruction_area()
+        self.right_stack.addWidget(self.instruction_widget)
 
         self.content_layout.addWidget(self.right_widget, 0, 3, 12, 9)
+
+        # 默认显示说明页面
+        self.right_stack.setCurrentWidget(self.config_widget)
+
+    def setup_config_page(self):
+        """设置配置页面，包含所有下载相关的组件"""
+        # 创建输入区域
+        input_widget = QtWidgets.QWidget()
+        input_layout = QtWidgets.QGridLayout(input_widget)
+
+        # SESSDATA输入框和标签
+        self.sessdata_label = QtWidgets.QLabel('SESSDATA:')
+        self.sessdata_input = QtWidgets.QLineEdit()
+        self.sessdata_input.setPlaceholderText("请输入SESSDATA")
+
+        # 添加保存cookie的复选框
+        self.save_cookie_checkbox = QtWidgets.QCheckBox("记住cookie（不建议在公共设备上使用）")
+        self.save_cookie_checkbox.setObjectName("save_cookie_checkbox")
+        self.save_cookie_checkbox.setChecked(self.config.get('save_cookie', False))
+        if self.config.get('save_cookie') and self.config.get('sessdata'):
+            self.sessdata_input.setText(self.config['sessdata'])
+
+        # BV号输入框和标签
+        self.bv_label = QtWidgets.QLabel('视频链接:')
+        self.bv_input = QtWidgets.QLineEdit()
+        self.bv_input.setPlaceholderText("请输入BV号或视频链接")
+
+        # 检查按钮
+        self.check_button = QtWidgets.QPushButton("检查视频")
+        self.check_button.setObjectName('check_button')  # 添加对象名，用于样式设置
+        self.check_button.clicked.connect(self.check_video)
+
+        # 设置输入区域布局
+        input_layout.addWidget(self.sessdata_label, 0, 0)
+        input_layout.addWidget(self.sessdata_input, 0, 1, 1, 3)
+        input_layout.addWidget(self.save_cookie_checkbox, 1, 1, 1, 3)
+        input_layout.addWidget(self.bv_label, 2, 0)
+        input_layout.addWidget(self.bv_input, 2, 1, 1, 2)
+        input_layout.addWidget(self.check_button, 2, 3)
+
+        # 下载选项区域
+        options_widget = QtWidgets.QWidget()
+        options_layout = QtWidgets.QGridLayout(options_widget)
+
+        # 质量选择
+        self.quality_label = QtWidgets.QLabel('视频质量:')
+        self.quality_combo = QtWidgets.QComboBox()
+
+        # 保存路径
+        self.path_label = QtWidgets.QLabel('保存路径:')
+        self.path_input = QtWidgets.QLineEdit()
+        self.path_input.setText(self.config['last_save_path'])
+        self.browse_button = QtWidgets.QPushButton("浏览")
+        self.browse_button.setObjectName('browse_button')  # 添加对象名，用于样式设置
+        self.browse_button.clicked.connect(self.browse_path)
+
+        # 设置下载选项布局
+        options_layout.addWidget(self.quality_label, 0, 0)
+        options_layout.addWidget(self.quality_combo, 0, 1, 1, 2)
+        options_layout.addWidget(self.path_label, 1, 0)
+        options_layout.addWidget(self.path_input, 1, 1, 1, 2)
+        options_layout.addWidget(self.browse_button, 1, 3)
+
+        # 进度条区域
+        progress_widget = QtWidgets.QWidget()
+        progress_layout = QtWidgets.QGridLayout(progress_widget)
+
+        self.progress = QtWidgets.QProgressBar()
+        self.progress.setValue(0)
+        self.progress.setTextVisible(True)
+        self.progress.setFormat("%p%")
+
+        self.status_label = QtWidgets.QLabel("就绪")
+        self.status_label.setObjectName("status_label")
+        self.status_label.setAlignment(QtCore.Qt.AlignCenter)
+
+        # 设置进度条布局
+        progress_layout.addWidget(self.progress, 0, 0, 1, 12)
+        progress_layout.addWidget(self.status_label, 1, 0, 1, 12)
+
+        # 将所有组件添加到配置页面布局中
+        self.config_layout.addWidget(input_widget, 0, 0, 2, 12)
+        self.config_layout.addWidget(options_widget, 2, 0, 2, 12)
+        self.config_layout.addWidget(progress_widget, 4, 0, 2, 12)
+
+    def setup_instruction_area(self):
+        """设置使用说明区域"""
+        instruction_text = QtWidgets.QTextEdit()
+        instruction_text.setReadOnly(True)
+        instruction_text.setHtml("""
+            <h2>哔哩哔哩下载器使用说明</h2>
+            <p>1. 获取SESSDATA:</p>
+            <ul>
+                <li>登录bilibili网站</li>
+                <li>按F12打开开发者工具</li>
+                <li>找到Application/Cookie</li>
+                <li>复制SESSDATA的值</li>
+            </ul>
+            <p>2. 下载视频:</p>
+            <ul>
+                <li>点击"配置"按钮打开配置界面</li>
+                <li>输入SESSDATA和视频BV号</li>
+                <li>点击"检查视频"获取视频信息</li>
+                <li>选择视频质量和保存路径</li>
+                <li>点击"开始下载"按钮开始下载</li>
+            </ul>
+            <p>3. 其他功能:</p>
+            <ul>
+                <li>"打开目录": 打开当前下载目录</li>
+                <li>"下载历史": 查看历史下载记录</li>
+            </ul>
+        """)
+        self.instruction_layout.addWidget(instruction_text)
+
+    def show_config(self):
+        """显示配置界面"""
+        self.right_stack.setCurrentWidget(self.config_widget)
+
+    def show_instructions(self):
+        """显示使用说明"""
+        self.right_stack.setCurrentWidget(self.instruction_widget)
 
     def setup_input_area(self):
         """设置输入区域"""
@@ -249,9 +393,7 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
         # 添加保存cookie的复选框
         self.save_cookie_checkbox = QtWidgets.QCheckBox("记住cookie（不建议在公共设备上使用）")
         self.save_cookie_checkbox.setObjectName("save_cookie_checkbox")
-        # 根据配置设置复选框状态
         self.save_cookie_checkbox.setChecked(self.config.get('save_cookie', False))
-        # 如果之前保存了SESSDATA，自动填充
         if self.config.get('save_cookie') and self.config.get('sessdata'):
             self.sessdata_input.setText(self.config['sessdata'])
 
@@ -273,10 +415,11 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
         input_layout.addWidget(self.check_button, 2, 3)  # 检查按钮
 
         # 设置布局的间距
-        input_layout.setContentsMargins(10, 10, 10, 10)  # 设置外边距
-        input_layout.setSpacing(10)  # 设置组件之间的间距
+        input_layout.setContentsMargins(10, 10, 10, 10)
+        input_layout.setSpacing(10)
 
-        self.right_layout.addWidget(input_widget, 0, 0, 2, 12)
+        # 使用正确的布局方法添加到config_layout
+        self.config_layout.addWidget(input_widget, 0, 0, 2, 12)
 
     def setup_download_options(self):
         """设置下载选项区域"""
@@ -795,6 +938,12 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
                 }
         ''')
 
+        self.right_stack.setStyleSheet('''
+            QStackedWidget {
+                border: none;
+            }
+        ''')
+
         self.right_widget.setStyleSheet('''
             QWidget#right_widget {
                 background-color: #FFFFFF;
@@ -934,7 +1083,75 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
                 background-color: #357ABD;
             }
         '''
+        # 配置页面样式
+        self.config_widget.setStyleSheet('''
+                QWidget#config_widget {
+                    background-color: #FFFFFF;
+                    border-bottom-right-radius: 10px;
+                }
+                QLabel {
+                    color: #333333;
+                    font-size: 14px;
+                    font-weight: 500;
+                    padding: 10px;
+                }
+                QLineEdit {
+                    border: 1px solid #DCE1E8;
+                    border-radius: 6px;
+                    padding: 8px 12px;
+                    background-color: #FFFFFF;
+                }
+                QLineEdit:focus {
+                    border: 1px solid #4A90E2;
+                }
+                QPushButton#check_button, QPushButton#browse_button {
+                    border: 1px solid #DCE1E8;
+                    border-radius: 6px;
+                    padding: 8px 16px;
+                    background-color: #4A90E2;
+                    color: white;
+                    font-weight: 500;
+                    min-width: 80px;
+                }
+                QPushButton#check_button:hover, QPushButton#browse_button:hover {
+                    background-color: #357ABD;
+                }
+                QComboBox {
+                    border: 1px solid #DCE1E8;
+                    border-radius: 6px;
+                    padding: 8px 12px;
+                    background-color: #FFFFFF;
+                }
+                QProgressBar {
+                    border: none;
+                    border-radius: 4px;
+                    text-align: center;
+                    background-color: #F5F5F5;
+                }
+                QProgressBar::chunk {
+                    background-color: #4A90E2;
+                    border-radius: 4px;
+                }
+                QLabel#status_label {
+                    color: #666666;
+                    font-size: 13px;
+                }
+            ''')
 
+        # 说明页面样式
+        self.instruction_widget.setStyleSheet('''
+                QWidget#instruction_widget {
+                    background-color: #FFFFFF;
+                    border-bottom-right-radius: 10px;
+                }
+                QTextEdit {
+                    border: none;
+                    background-color: #FFFFFF;
+                    color: #333333;
+                    font-size: 14px;
+                    padding: 20px;
+                }
+            ''')
 
 def main():
     QtCore.QCoreApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling)
