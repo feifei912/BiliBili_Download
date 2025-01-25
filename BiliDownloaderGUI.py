@@ -8,6 +8,8 @@ import qtawesome
 import subprocess
 from PyQt5 import QtCore, QtGui, QtWidgets
 from BiliVideoDownloader import BiliVideoDownloader
+from ffmpeg_manager import FFmpegManager, get_ffmpeg
+
 
 class EllipsisTableWidgetItem(QtWidgets.QTableWidgetItem):
     def __init__(self, text):
@@ -338,10 +340,27 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
         progress_layout.addWidget(self.progress, 0, 0, 1, 12)
         progress_layout.addWidget(self.status_label, 1, 0, 1, 12)
 
+        # FFmpeg信息和按钮区域
+        ffmpeg_widget = QtWidgets.QWidget()
+        ffmpeg_layout = QtWidgets.QGridLayout(ffmpeg_widget)
+        ffmpeg_label = QtWidgets.QLabel("请确保已经下载安装ffmpeg")
+        ffmpeg_label.setObjectName('ffmpeg_label')
+        check_ffmpeg_button = QtWidgets.QPushButton("检测是否已安装")
+        check_ffmpeg_button.setObjectName('check_ffmpeg_button')
+        check_ffmpeg_button.clicked.connect(self.check_ffmpeg)
+        download_ffmpeg_button = QtWidgets.QPushButton("下载安装")
+        download_ffmpeg_button.setObjectName('download_ffmpeg_button')
+        download_ffmpeg_button.clicked.connect(self.download_ffmpeg)
+
+        ffmpeg_layout.addWidget(ffmpeg_label, 0, 0, 1, 2)
+        ffmpeg_layout.addWidget(check_ffmpeg_button, 0, 2)
+        ffmpeg_layout.addWidget(download_ffmpeg_button, 0, 3)
+
         # 将所有组件添加到配置页面布局中
         self.config_layout.addWidget(input_widget, 0, 0, 2, 12)
         self.config_layout.addWidget(options_widget, 2, 0, 2, 12)
         self.config_layout.addWidget(progress_widget, 4, 0, 2, 12)
+        self.config_layout.addWidget(ffmpeg_widget, 6, 0, 1, 12)
 
     def setup_instruction_area(self):
         """设置使用说明区域"""
@@ -370,7 +389,25 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
                 <li>"下载历史": 查看历史下载记录</li>
             </ul>
         """)
+
+        # FFmpeg信息和按钮区域
+        ffmpeg_widget = QtWidgets.QWidget()
+        ffmpeg_layout = QtWidgets.QGridLayout(ffmpeg_widget)
+        ffmpeg_label = QtWidgets.QLabel("请确保已经下载安装ffmpeg")
+        ffmpeg_label.setObjectName('ffmpeg_label')
+        check_ffmpeg_button = QtWidgets.QPushButton("检测是否已安装")
+        check_ffmpeg_button.setObjectName('check_ffmpeg_button')
+        check_ffmpeg_button.clicked.connect(self.check_ffmpeg)
+        download_ffmpeg_button = QtWidgets.QPushButton("下载安装")
+        download_ffmpeg_button.setObjectName('download_ffmpeg_button')
+        download_ffmpeg_button.clicked.connect(self.download_ffmpeg)
+
+        ffmpeg_layout.addWidget(ffmpeg_label, 0, 0, 1, 2)
+        ffmpeg_layout.addWidget(check_ffmpeg_button, 0, 2)
+        ffmpeg_layout.addWidget(download_ffmpeg_button, 0, 3)
+
         self.instruction_layout.addWidget(instruction_text)
+        self.instruction_layout.addWidget(ffmpeg_widget)
 
     def show_config(self):
         """显示配置界面"""
@@ -694,6 +731,25 @@ class BiliDownloaderGUI(QtWidgets.QMainWindow):
                 subprocess.Popen(['xdg-open', current_path])
         else:
             QtWidgets.QMessageBox.warning(self, "警告", "目录不存在！")
+
+    def check_ffmpeg(self):
+        """检测是否已安装FFmpeg"""
+        try:
+            ffmpeg_path = FFmpegManager().ensure_ffmpeg()
+            if ffmpeg_path:
+                QtWidgets.QMessageBox.information(self, "FFmpeg检测", f"系统已安装FFmpeg: {ffmpeg_path}")
+            else:
+                QtWidgets.QMessageBox.warning(self, "FFmpeg检测", "系统未安装FFmpeg")
+        except Exception as e:
+            QtWidgets.QMessageBox.critical(self, "错误", f"检测FFmpeg时出错: {str(e)}")
+
+    def download_ffmpeg(self):
+        """下载安装FFmpeg"""
+        try:
+            ffmpeg_path = get_ffmpeg()
+            QtWidgets.QMessageBox.information(self, "FFmpeg下载", f"FFmpeg成功安装: {ffmpeg_path}")
+        except Exception as e:
+            QtWidgets.QMessageBox.critical(self, "错误", f"下载安装FFmpeg时出错: {str(e)}")
 
     def check_video(self):
         """检查视频信息"""
