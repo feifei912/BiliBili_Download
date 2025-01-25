@@ -91,9 +91,7 @@ python BiliDownloaderGUI.py
 ## 常见问题
 
 1. **无法下载高清晰度视频？**
-   
    - 720P及以上清晰度需要输入用户cookie，否则只能最高480P
-
    - 1080P高帧率及以上清晰度需要检查是否配置了正确的大会员Cookie
    
 2. **下载速度慢？**
@@ -107,7 +105,7 @@ python BiliDownloaderGUI.py
 
 ## 更新日志
 
-### v1.0.0 (2025-01-25)
+### v1.0.0 (2025-01-15 至 2025-01-25)
 
 - 完善视频下载功能
 
@@ -132,4 +130,11 @@ python BiliDownloaderGUI.py
 - 提交代码前请先进行测试
 
 ### 致谢
+感谢 [BiliVideo_Download](https://github.com/keyblues/BiliVideo_Download) 提供的视频下载代码思路   
 感谢所有为本项目提供反馈和建议的用户。
+
+### 支持项目
+如果觉得这个项目对您有帮助：
+- ⭐ 给项目点个星星！
+- 📢 帮助分享这个项目
+- 🐛 提交问题和建议
