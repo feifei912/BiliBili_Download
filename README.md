@@ -2,7 +2,7 @@
 
 [![Python Version](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Last Commit](https://img.shields.io/github/last-commit/feifei912/BiliBili_Download)](https://github.com/feifei912/BiliBili_Download/commits/main)
+[![Last Commit](https://img.shields.io/github/last-commit/feifei912/BiliBili_Download)](https://github.com/feifei912/BiliBili_Download/commits/master)
 
 ## 目录
 - [项目介绍](#项目介绍)
